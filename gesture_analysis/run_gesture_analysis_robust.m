@@ -1,9 +1,9 @@
 % =========================================================================
 % run_gesture_analysis_robust.m
-% 功能: 鲁棒手势感知全流程 (v9.1 - 静默环境防崩溃版)
-% 修复:
-%   1. [防崩溃] 当没有检测到手势时，不再报错退出，而是提示并仅绘制波动图。
-%   2. [可视化] 即使无手势，也会画出 Step 1 的 GVI 曲线，方便观察底噪。
+% 功能: 鲁棒手势感知全流程 (v10.2 - 参数更新版)
+% 核心: 
+%   1. 参数完全匹配用户指定要求 (GVI=5, Window=1.5, SpikeDur=3)。
+%   2. 逻辑保持 v10.1 的修复状态 (无数据覆盖 Bug)。
 % =========================================================================
 
 %% ================= [Part 1] 环境检查与参数设置 =================
@@ -14,40 +14,36 @@ addpath(genpath('sky_plot'));
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('nav_parse'));
 
-fprintf('--> 启动鲁棒手势感知分析 (Robust Mode)...\n');
+fprintf('--> 启动鲁棒手势感知分析 (Parameters Updated)...\n');
 
 % --- 参数设置 ---
-
 % [Step 0: 信号预处理参数 (Smart Flattening)]
-PARA.diff_lag_N         = 5;     % 趋势窗口 (N点)
-PARA.noise_cutoff_db    = 1;     % 噪声阈值 (dB): <=1dB 的波动视为噪声
-PARA.spike_th_db        = 2;     % 毛刺阈值
-PARA.spike_max_duration = 5;     % 宽毛刺剔除
-
+PARA.diff_lag_N         = 5;     % 趋势窗口 (N点): 用于识别缓坡台阶，防止被误削
+PARA.noise_cutoff_db    = 1;     % 噪声阈值 (dB): 波动幅度 <= 此值时视为噪声被削平
+PARA.spike_th_db        = 2;     % 毛刺幅度阈值 (dB): 跳变 > 此值才检查毛刺
+PARA.spike_max_duration = 3;     % 毛刺最大持续点数 (1-5): 允许剔除宽毛刺
 % [Step 1: 分段与检测参数]
-PARA.smooth_window_sec = 1.8;   % 滑动平均窗口
-PARA.gvi_threshold     = 8;     % GVI 阈值 (超过此值才算动作)
-PARA.sampling_rate     = 25;    
-PARA.merge_gap_sec     = 0.01;  
-PARA.min_duration_sec  = 0.4;   
-
+PARA.smooth_window_sec = 1.5;   % 滑动平均窗口大小（秒）
+PARA.gvi_threshold     = 5;     % GVI（波动指数）阈值
+PARA.sampling_rate     = 25;    % 数据采样率（Hz）
+PARA.merge_gap_sec     = 0.01;  % 合并间隙（秒）
+PARA.min_duration_sec  = 0.4;   % 最小持续时间（秒）
 % [Step 2: 3D 轨迹投影参数]
-TRAJ.gesture_height    = 0.20;  
-TRAJ.min_elevation     = 15;    
-TRAJ.energy_th_ratio   = 0.2;   
-
-% [Step 2: 抗干扰算法参数]
-ALG.zenith_safe_deg    = 30;    
-ALG.az_neighbor_dist   = 20;    
-ALG.density_penalty_k  = 1.0;   
-ALG.ransac_iter        = 500;   
-ALG.ransac_dist_th     = 0.20;  
+TRAJ.gesture_height    = 0.20;  % 手势物理高度（米）
+TRAJ.min_elevation     = 15;    % 最低仰角阈值（度）
+TRAJ.energy_th_ratio   = 0.2;   % 能量筛选比例
+% [Step 2: 抗干扰与几何算法参数]
+ALG.zenith_safe_deg    = 30;    % 天顶角安全区（度）
+ALG.az_neighbor_dist   = 20;    % 方位角邻域（度）
+ALG.density_penalty_k  = 1.0;   % 密度惩罚系数
+ALG.ransac_iter        = 500;   % RANSAC 迭代次数
+ALG.ransac_dist_th     = 0.20;  % RANSAC 内点阈值（米）
 
 
 %% ================= [Part 2] 核心计算流程 =================
 
 % ----------------- [Step 0 计算] 数据提取与智能削平 -----------------
-fprintf('--> [Step 0 计算] 提取数据并执行智能削平...\n');
+fprintf('--> [Step 0] 提取数据并执行智能削平...\n');
 
 % 1. 提取卫星ID
 all_sat_ids = {};
@@ -66,7 +62,7 @@ num_samples = length(t_grid);
 num_sats = length(valid_sats);
 t_grid_plot = t_grid + hours(8) - seconds(18); 
 
-% 3. 提取原始数据
+% 3. 提取原始数据 (DATA ENTRY POINT)
 cn0_matrix = NaN(num_samples, num_sats);
 for s_idx = 1:num_sats
     sat_id = valid_sats{s_idx};
@@ -92,7 +88,8 @@ for s_idx = 1:num_sats
     end
 end
 
-% 4. 智能削平算法
+% 4. 智能削平算法 (直接修改 cn0_matrix)
+% DATA FLOW: Raw CN0 -> Flattened CN0
 N = PARA.diff_lag_N; Th = PARA.noise_cutoff_db; SpikeTh = PARA.spike_th_db; MaxDur = PARA.spike_max_duration;
 for s = 1:num_sats
     raw_col = cn0_matrix(:, s); col = raw_col;
@@ -103,6 +100,7 @@ for s = 1:num_sats
         if isnan(curr_raw), last_val = NaN; continue; end
         if isnan(last_val), last_val = curr_raw; col(t) = last_val; continue; end
         
+        % 宽毛刺检测
         is_spike = false; spike_width = 0; delta_curr = curr_raw - last_val;
         if abs(delta_curr) > SpikeTh
             for k = 1:MaxDur
@@ -112,6 +110,7 @@ for s = 1:num_sats
         end
         if is_spike, col(t) = last_val; skip_counter = spike_width - 1; continue; end
         
+        % 趋势判断
         if t > N, trend_diff = abs(curr_raw - raw_col(t-N)); else, trend_diff = 0; end
         if trend_diff > Th
             col(t) = curr_raw; last_val = curr_raw;
@@ -119,25 +118,29 @@ for s = 1:num_sats
             if abs(curr_raw - last_val) <= Th, col(t) = last_val; else, col(t) = curr_raw; last_val = curr_raw; end
         end
     end
-    cn0_matrix(:, s) = col; 
+    cn0_matrix(:, s) = col; % 更新矩阵为削平后的数据
 end
 
 
 % ----------------- [Step 1 计算] SG滤波与分段 -----------------
-fprintf('--> [Step 1 计算] SG滤波与手势分段...\n');
+fprintf('--> [Step 1] SG滤波与手势分段 (基于削平数据)...\n');
 
+% [数据流确认] 此时 cn0_matrix 已经是削平过的了，直接送入 SG
 for s = 1:num_sats
     col = cn0_matrix(:, s); valid = ~isnan(col);
     if sum(valid) > 14
         idx = 1:length(col); filled = interp1(idx(valid), col(valid), idx, 'linear', 'extrap')';
-        cn0_matrix(:, s) = sgolayfilt(filled, 2, 7);
+        cn0_matrix(:, s) = sgolayfilt(filled, 2, 7); % 再次更新为 SG 滤波后的数据
     end
 end
 
+% 计算 GVI (基于 削平+SG 后的数据)
 cn0_smooth = movmean(cn0_matrix, round(PARA.smooth_window_sec * PARA.sampling_rate), 1, 'omitnan');
 volatility_matrix = abs(cn0_matrix - cn0_smooth);
 gvi_curve_clean = movmean(sum(volatility_matrix, 2, 'omitnan'), 5);
 is_active = gvi_curve_clean > PARA.gvi_threshold;
+
+% 连通域
 gap_pts = round(PARA.merge_gap_sec * PARA.sampling_rate);
 pad_act = [1; is_active; 1];
 g_starts = find(diff(pad_act)==-1); g_ends = find(diff(pad_act)==1)-1;
@@ -156,29 +159,27 @@ for i=1:length(s_idxs)
     end
 end
 
-% --- [关键修复] 如果没检测到手势，不要报错，而是标记为空 ---
+% 初始化结果容器
 segment_fits = []; step2_vis_data = []; final_draw_data = []; seg_cnt = 0;
 
 if cnt == 0
     fprintf('⚠️  提示: 本次未检测到有效手势片段 (GVI均低于 %d)。\n', PARA.gvi_threshold);
-    fprintf('    将直接跳转至绘图，展示波动曲线以供检查。\n');
 else
     fprintf('✅ [Step 1] 分段完成，共 %d 个片段。\n', cnt);
     
-    % ----------------- [Step 2 计算] 鲁棒 3D 轨迹推演 (仅当有片段时执行) -----------------
-    fprintf('--> [Step 2 计算] 开始鲁棒轨迹推演...\n');
+    % ----------------- [Step 2 计算] 鲁棒 3D 轨迹推演 -----------------
+    fprintf('--> [Step 2] 开始鲁棒轨迹推演...\n');
     [~, anchor_ep_idx] = min(abs([obs_data.time] - segments(1).peak_time));
     try
         [ref_rec_pos, ~, ~] = calculate_receiver_position(obs_data, nav_data, anchor_ep_idx);
         if isempty(ref_rec_pos) || any(isnan(ref_rec_pos)), error('无法计算参考点位置'); end
         [ref_lat, ref_lon, ref_alt] = ecef2geodetic(ref_rec_pos(1), ref_rec_pos(2), ref_rec_pos(3));
     catch ME
-        fprintf('⚠️ 参考点计算失败，跳过轨迹推演: %s\n', ME.message);
-        cnt = 0; % 强制设为0以跳过后续
+        fprintf('⚠️ 参考点计算失败: %s\n', ME.message);
+        cnt = 0; 
     end
     
     if cnt > 0
-        % 初始化容器
         segment_fits = struct('p_start', {}, 'p_end', {}, 't_center', {}, 'w_sum', {}, 'valid', {});
         step2_vis_data = struct('seg_id', {}, 'traj_az', {}, 'hits_data', {}, 'best_inliers', {}, 'p_start', {}, 'p_end', {});
         
@@ -186,6 +187,7 @@ else
             seg = segments(i);
             idx_range = seg.start_idx : seg.end_idx;
             seg_times = t_grid(idx_range);
+            % sub_vol 也是基于削平后的数据计算的
             sub_vol = volatility_matrix(idx_range, :);
             
             [~, ep_idx] = min(abs([obs_data.time] - seg.peak_time));
@@ -209,6 +211,8 @@ else
                 if vec_u(3) <= 0 || (90-zen_deg) < TRAJ.min_elevation, continue; end
                 t_int = TRAJ.gesture_height / vec_u(3); pt_int = t_int * vec_u;
                 if norm(pt_int(1:2)) > 3.0, continue; end 
+                
+                % energy 也是基于削平数据的 sub_vol
                 energy = sum(sub_vol(:, s), 'omitnan'); [~, mx_i] = max(sub_vol(:, s));
                 
                 raw_cnt = raw_cnt + 1;
@@ -280,7 +284,7 @@ else
         end
         
         % ----------------- [Step 3 计算] 轨迹重构 -----------------
-        fprintf('--> [Step 3 计算] 生成最终手势矢量链...\n');
+        fprintf('--> [Step 3] 生成最终手势矢量链...\n');
         if seg_cnt > 0
             [~, sort_idx] = sort([segment_fits.t_center]); sorted_segs = segment_fits(sort_idx);
             current_pen_pos = sorted_segs(1).p_start; 
@@ -298,36 +302,35 @@ end
 
 
 %% ================= [Part 3] 统一绘图流程 =================
-fprintf('\n--> 开始生成图表 (无论是否有手势)...\n');
+fprintf('\n--> 开始生成所有图表...\n');
 
-% --- [图表 1] Step 1 GVI 分段详情图 (总是绘制) ---
-figure('Name', 'Step 1: GVI Segmentation', 'Position', [50, 100, 1000, 600], 'Color', 'w');
-subplot(2,1,1);
-plot(t_grid_plot, gvi_curve_clean, 'k-', 'LineWidth', 1); hold on;
-yline(PARA.gvi_threshold, 'b--', 'Threshold');
-title(sprintf('全局波动指数 (GVI) 与阈值 (Th=%d)', PARA.gvi_threshold));
-ylabel('GVI'); xlabel('Time (BJT)');
-datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); grid on; axis tight;
-
-subplot(2,1,2);
-plot(t_grid_plot, gvi_curve_clean, 'Color', [0.8 0.8 0.8]); hold on;
-yline(PARA.gvi_threshold, 'b--');
-yl = ylim;
-% 只有检测到片段时才画红色框
-for i = 1:cnt
-    idx = segments(i).start_idx : segments(i).end_idx;
-    t_s = t_grid_plot(segments(i).start_idx); t_e = t_grid_plot(segments(i).end_idx);
-    patch([t_s t_e t_e t_s], [yl(1) yl(1) yl(2) yl(2)], 'r', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
-    plot(t_grid_plot(idx), gvi_curve_clean(idx), 'r-', 'LineWidth', 1.5);
-    text(t_grid_plot(segments(i).peak_idx), segments(i).peak_gvi, sprintf('#%d', i), 'Color', 'r', 'FontWeight', 'bold', 'VerticalAlignment', 'bottom');
+% --- [图表 1] Step 1 GVI 分段详情图 ---
+if ~isempty(segments)
+    figure('Name', 'Step 1: GVI Segmentation', 'Position', [50, 100, 1000, 600], 'Color', 'w');
+    subplot(2,1,1);
+    plot(t_grid_plot, gvi_curve_clean, 'k-', 'LineWidth', 1); hold on;
+    yline(PARA.gvi_threshold, 'b--', 'Threshold');
+    title(sprintf('全局波动指数 (GVI) 与阈值 (Th=%d)', PARA.gvi_threshold));
+    ylabel('GVI'); xlabel('Time (BJT)');
+    datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); grid on; axis tight;
+    subplot(2,1,2);
+    plot(t_grid_plot, gvi_curve_clean, 'Color', [0.8 0.8 0.8]); hold on;
+    yline(PARA.gvi_threshold, 'b--');
+    yl = ylim;
+    for i = 1:cnt
+        idx = segments(i).start_idx : segments(i).end_idx;
+        t_s = t_grid_plot(segments(i).start_idx); t_e = t_grid_plot(segments(i).end_idx);
+        patch([t_s t_e t_e t_s], [yl(1) yl(1) yl(2) yl(2)], 'r', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
+        plot(t_grid_plot(idx), gvi_curve_clean(idx), 'r-', 'LineWidth', 1.5);
+        text(t_grid_plot(segments(i).peak_idx), segments(i).peak_gvi, sprintf('#%d', i), 'Color', 'r', 'FontWeight', 'bold', 'VerticalAlignment', 'bottom');
+    end
+    title(sprintf('检测到的手势片段: %d 个 (若为0则表示全是噪声)', cnt));
+    xlabel('Time (BJT)'); ylabel('GVI');
+    datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); grid on; axis tight;
 end
-title(sprintf('检测到的手势片段: %d 个 (若为0则表示全是噪声)', cnt));
-xlabel('Time (BJT)'); ylabel('GVI');
-datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); grid on; axis tight;
 
-% --- [图表 2 & 3] 仅当检测到手势时才绘制 ---
+% --- [图表 2 & 3] ---
 if cnt > 0
-    % Step 2 几何分析
     for k = 1:length(step2_vis_data)
         d = step2_vis_data(k);
         fig_name = sprintf('Seg #%d Analysis (Az=%.1f)', d.seg_id, d.traj_az);
@@ -348,7 +351,6 @@ if cnt > 0
         xlim([-2.5 2.5]); ylim([-2.5 2.5]);
     end
     
-    % Step 3 轨迹重构
     if seg_cnt > 0
         f_final = figure('Name', 'Final Gesture Vector Map', 'Position', [300, 100, 800, 800], 'Color', 'w');
         ax_f = axes('Parent', f_final); hold(ax_f, 'on'); grid(ax_f, 'on'); axis(ax_f, 'equal');
@@ -368,8 +370,10 @@ if cnt > 0
         xlim(ax_f, xl + [-0.5 0.5]); ylim(ax_f, yl + [-0.5 0.5]); legend('Location', 'bestoutside');
     end
 end
-
 fprintf('✅ 所有分析完成。\n');
+
+
+
 
 
 

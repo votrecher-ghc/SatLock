@@ -333,22 +333,23 @@ end
 if cnt > 0
     for k = 1:length(step2_vis_data)
         d = step2_vis_data(k);
-        fig_name = sprintf('Seg #%d Analysis (Az=%.1f)', d.seg_id, d.traj_az);
-        f = figure('Name', fig_name, 'Position', [100+(k-1)*30, 200, 500, 500], 'Color', 'w');
-        ax = axes('Parent', f); hold(ax, 'on'); grid(ax, 'on'); axis(ax, 'equal');
-        xlabel('East (m)'); ylabel('North (m)');
-        title({sprintf('手势片段 #%d 几何分析', d.seg_id), '红色=Inliers | 灰色=Outliers | 蓝色=拟合向量'});
-        plot(ax, 0, 0, '^', 'MarkerSize', 10, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k'); 
-        for j = 1:length(d.hits_data)
-            pt = d.hits_data(j).pos; w = d.hits_data(j).w_final;
-            is_in = d.best_inliers(j);
-            col = [0.7 0.7 0.7]; if is_in, col = 'r'; end
-            ms = 5 + w * 15; 
-            plot(ax, pt(1), pt(2), 'o', 'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', ms);
-        end
-        plot(ax, [d.p_start(1), d.p_end(1)], [d.p_start(2), d.p_end(2)], 'b-', 'LineWidth', 2);
-        quiver(ax, d.p_start(1), d.p_start(2), d.p_end(1)-d.p_start(1), d.p_end(2)-d.p_start(2), 'Color', 'b', 'LineWidth', 2, 'MaxHeadSize', 0.5, 'AutoScale', 'off');
-        xlim([-2.5 2.5]); ylim([-2.5 2.5]);
+%         fig_name = sprintf('Seg #%d Analysis (Az=%.1f)', d.seg_id, d.traj_az);
+%         f = figure('Name', fig_name, 'Position', [100+(k-1)*30, 200, 500, 500], 'Color', 'w');
+%         ax = axes('Parent', f); hold(ax, 'on'); grid(ax, 'on'); axis(ax, 'equal');
+%         xlabel('East (m)'); ylabel('North (m)');
+%         title({sprintf('手势片段 #%d 几何分析', d.seg_id), '红色=Inliers | 灰色=Outliers | 蓝色=拟合向量'});
+%         plot(ax, 0, 0, '^', 'MarkerSize', 10, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k'); 
+%         
+%         for j = 1:length(d.hits_data)
+%             pt = d.hits_data(j).pos; w = d.hits_data(j).w_final;
+%             is_in = d.best_inliers(j);
+%             col = [0.7 0.7 0.7]; if is_in, col = 'r'; end
+%             ms = 5 + w * 15; 
+%             plot(ax, pt(1), pt(2), 'o', 'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', ms);
+%         end
+%         plot(ax, [d.p_start(1), d.p_end(1)], [d.p_start(2), d.p_end(2)], 'b-', 'LineWidth', 2);
+%         quiver(ax, d.p_start(1), d.p_start(2), d.p_end(1)-d.p_start(1), d.p_end(2)-d.p_start(2), 'Color', 'b', 'LineWidth', 2, 'MaxHeadSize', 0.5, 'AutoScale', 'off');
+%         xlim([-2.5 2.5]); ylim([-2.5 2.5]);
     end
     
     if seg_cnt > 0

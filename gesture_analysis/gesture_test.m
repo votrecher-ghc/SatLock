@@ -1,8 +1,8 @@
 % ============== test.m (最终调用脚本) ==============
 clear; clc; 
 close all;
-obs_filepath = 'arounds_12_8_1.obs'; 
-nav_filepath = 'arounds_12_8_1.nav'; 
+obs_filepath = 'mixfingure_11_3_2.obs'; 
+nav_filepath = 'arounds_11_3_1.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);
@@ -25,9 +25,16 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 % step2_direction_estimation;
 
 %%
-visualize_sensing_range
+% visualize_sensing_range
 
 %%
-
-% run_gesture_analysis_robust
 % test_snr_flattening
+% run_gesture_analysis_robust_aheadN
+
+%%
+% test_snr_baseline_algorithm
+% run_gesture_analysis_robust_baseline
+run_gesture_analysis_continuous_track
+
+run_gesture_analysis_boundary_trackV3
+run_gesture_analysis_boundary_track

@@ -28,7 +28,7 @@ PARA.spike_max_duration = 3;     % 毛刺点数
 
 % [Step 1: 能量门控]
 PARA.smooth_window_sec = 1.5;   % GVI平滑窗口
-PARA.gvi_threshold     = 10;     % GVI能量阈值 (判定是否有动作)
+PARA.gvi_threshold     = 5;     % GVI能量阈值 (判定是否有动作)
 PARA.sampling_rate     = 25;    
 PARA.merge_gap_sec     = 0.2;   
 PARA.min_duration_sec  = 0.4;   

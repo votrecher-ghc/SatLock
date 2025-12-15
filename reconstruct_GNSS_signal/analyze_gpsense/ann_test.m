@@ -1,8 +1,8 @@
 % ============== test.m (最终调用脚本) ==============
 clear; clc; 
 close all;
-obs_filepath = 'mixfingure_12_8_20_3.obs'; 
-nav_filepath = 'arounds_12_8_1.nav'; 
+obs_filepath = 'fingure_little_A_12_12_3.obs'; 
+nav_filepath = 'arounds_12_12_3.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);

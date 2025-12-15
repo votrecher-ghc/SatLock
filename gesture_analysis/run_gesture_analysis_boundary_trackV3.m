@@ -27,7 +27,7 @@ PARA.spike_max_duration = 3;     % 毛刺持续点数
 
 % [Step 1: 能量门控 (Gating)]
 PARA.smooth_window_sec = 1.5;   % GVI平滑窗口
-PARA.gvi_threshold     = 10;     % 能量阈值
+PARA.gvi_threshold     = 5;     % 能量阈值
 PARA.sampling_rate     = 25;    % 采样率
 PARA.merge_gap_sec     = 0.2;   % [重要] 允许最大中断0.2秒，防止轨迹断裂
 PARA.min_duration_sec  = 0.4;   % [重要] 小于0.4秒的波动视为噪声，不追踪

@@ -39,7 +39,7 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 %%
 
 %模拟GNSS欺骗
-simulate_gnss_spoofing
+% simulate_gnss_spoofing
 
 %%
 %旧方法
@@ -57,10 +57,11 @@ simulate_gnss_spoofing
 %baseline预处理算法处理后利用切片识别方向算法，带手臂去除
 % run_gesture_analysis_robust_baseline
 
-%连续手势识别，PCA聚类，会导致重心偏移
-% run_gesture_analysis_continuous_track
+%连续手势识别，重心聚类，会导致重心偏移 
+%12.17修为仰角加权，极度抑制低仰角卫星
+run_gesture_analysis_continuous_track
 
 %连续手势识别，边界识别---远端
-run_gesture_analysis_boundary_trackV3
+% run_gesture_analysis_boundary_trackV3
 
 % run_gesture_analysis_boundary_track

@@ -1,7 +1,7 @@
 % ============== test.m (最终调用脚本) ==============
 clear; clc; 
 close all;
-obs_filepath = 'fingure_little_A_12_12_3.obs'; 
+obs_filepath = 'fingure_little_A_12_12_2.obs'; 
 nav_filepath = 'arounds_12_12_3.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);

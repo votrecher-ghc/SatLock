@@ -1,8 +1,10 @@
 % ============== test.m (最终调用脚本) ==============
-clear; clc; 
+clear;
+clc; 
 close all;
-obs_filepath = 'fingure_little_A_12_12_3.obs'; 
-nav_filepath = 'arounds_12_12_3.nav'; 
+%%
+obs_filepath = 'fingure_little_A_12_12_2.obs'; 
+nav_filepath = 'arounds_12_12_1.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);
@@ -12,6 +14,7 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 % calculate_and_plot_all_skyplot(obs_data, nav_data);
 
 %%
+%统计卫星在仰角范围内的数量
 % % 3. 设置参数
 % target_elevation = 60; % 方案A的阈值：30度
 % 
@@ -21,20 +24,43 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 % 
 % [count, sat_ids] = count_high_elevation_satellites(obs_data, nav_data, target_elevation);
 %%
+%旧方法
+
+%手势切片
 % step1_segmentation_GVI;
+
+%切片手势识别方向
 % step2_direction_estimation;
 
 %%
+
+%可视化感知范围
 % visualize_sensing_range
+%%
+
+%模拟GNSS欺骗
+simulate_gnss_spoofing
 
 %%
+%旧方法
+
+%测试aheadN预处理算法
 % test_snr_flattening
+
+%aheadN预处理算法处理后利用切片识别方向算法，带手臂去除
 % run_gesture_analysis_robust_aheadN
 
 %%
-test_snr_baseline_algorithm
+%测试baseline预处理算法
+% test_snr_baseline_algorithm
+
+%baseline预处理算法处理后利用切片识别方向算法，带手臂去除
 % run_gesture_analysis_robust_baseline
+
+%连续手势识别，PCA聚类，会导致重心偏移
 % run_gesture_analysis_continuous_track
 
-% run_gesture_analysis_boundary_trackV3
+%连续手势识别，边界识别---远端
+run_gesture_analysis_boundary_trackV3
+
 % run_gesture_analysis_boundary_track

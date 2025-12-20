@@ -54,7 +54,7 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 % run_gesture_analysis_3d_pipeline
 %%
 %测试baseline预处理算法
-% test_snr_baseline_algorithm
+test_snr_baseline_algorithm
 
 %baseline预处理算法处理后利用切片识别方向算法，带手臂去除
 % run_gesture_analysis_robust_baseline

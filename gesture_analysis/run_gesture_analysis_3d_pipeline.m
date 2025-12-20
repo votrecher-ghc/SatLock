@@ -13,7 +13,7 @@ if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
 
 % --- [Step 1] 分段参数 ---
 PARA.smooth_window_sec = 1.5;   
-PARA.gvi_threshold     = 8;     
+PARA.gvi_threshold     = 4;     
 PARA.sampling_rate     = 10;    
 PARA.merge_gap_sec     = 0.5;   
 PARA.min_duration_sec  = 0.4;   
@@ -318,28 +318,26 @@ for i = 1:length(segments)
             p_end(1)-p_start(1), p_end(2)-p_start(2), 0, ...
             0, 'Color', 'k', 'LineWidth', 3, 'MaxHeadSize', 0.5, 'DisplayName', 'Motion Vector');
     
-    %% ================= [图 2: 2D 投影与排斥约束视图 (新增)] =================
+%% ================= [图 2: 2D 投影与排斥约束视图 (新增)] =================
     fig_name_2d = sprintf('Gesture #%d 2D Geometry Analysis', i);
-    f2 = figure('Name', fig_name_2d, 'Position', [1000 + (i-1)*2, 100 + (i-1)*2, 600, 600], 'Color', 'w');
-    ax2d = axes('Parent', f2);
+    f2 = figure('Name', fig_name_2d, 'Position', [1000 + (i-1)*2, 100 + (i-1)*2, 600, 630], 'Color', 'w');
+    
+    % 调整坐标轴位置，为底部标签留出空间
+    ax2d = axes('Parent', f2, 'Position', [0.13, 0.15, 0.775, 0.75]); 
+    
     hold(ax2d, 'on'); grid(ax2d, 'on'); axis(ax2d, 'equal');
     xlabel(ax2d, 'East (m)'); ylabel(ax2d, 'North (m)');
-    title(ax2d, {sprintf('手势 #%d 投影平面几何分析', i), 'Attraction (Hit) vs Exclusion (Miss)'});
     
-    % 1. 绘制手势线段 (无限长轴线)
+    % 1. 绘制手势线段
     plot(ax2d, [p_axis_start(1), p_axis_end(1)], [p_axis_start(2), p_axis_end(2)], ...
          '--b', 'LineWidth', 1.5, 'DisplayName', 'Spatial Axis');
-
     % 2. 绘制接收机位置
     plot(ax2d, 0, 0, '^', 'MarkerSize', 10, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k', 'DisplayName', 'Receiver');
-
-    % 3. 绘制 Miss 点 (排斥约束)
+    % 3. 绘制 Miss 点
     if ~isempty(misses)
         miss_coords = vertcat(misses.pos);
         plot(ax2d, miss_coords(:,1), miss_coords(:,2), 'o', ...
              'Color', [0.4 0.4 0.4], 'MarkerSize', 5, 'LineWidth', 1, 'DisplayName', 'Miss Pts');
-         
-        % [细节] 画出每个 Miss 点的排斥半径圆圈 (理论上的 r_eff)
         theta = linspace(0, 2*pi, 30);
         for m=1:length(misses)
             cx = misses(m).pos(1) + TRAJ.miss_conflict_dist * cos(theta);
@@ -347,21 +345,45 @@ for i = 1:length(segments)
             plot(ax2d, cx, cy, '-', 'Color', [0.8 0.8 0.8], 'LineWidth', 0.5, 'HandleVisibility', 'off');
         end
     end
-
-    % 4. 绘制 Hit 点 (吸引约束)
+    % 4. 绘制 Hit 点
     hit_coords = vertcat(hits.pos);
     plot(ax2d, hit_coords(:,1), hit_coords(:,2), 'o', ...
          'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', 8, 'DisplayName', 'Hit Pts');
-
-    % 5. 绘制手势向量 (实部)
+    % 5. 绘制手势向量
     quiver(ax2d, p_start_2d(1), p_start_2d(2), ...
            p_end_2d(1)-p_start_2d(1), p_end_2d(2)-p_start_2d(2), ...
            'Color', 'k', 'LineWidth', 2.5, 'MaxHeadSize', 0.5, 'DisplayName', 'Motion Vector', 'AutoScale', 'off');
-
-    legend(ax2d, 'Location', 'best');
+    legend(ax2d, 'Location', 'bestoutside');
     xlim(ax2d, [-view_range, view_range]);
     ylim(ax2d, [-view_range, view_range]);
     
-    fprintf('   Seg #%d: 方向 %.1f 度 (相关性 %.2f) %s\n', i, az, abs(corr_v), str_conflict);
+    % ================= [新增: 自动判断英文方向标签] =================
+    % 逻辑：将角度归一化到 0-360，根据区间判断东南西北
+    % 假设坐标系为 ENU (East=0, North=90)
+    az_norm = mod(az, 360); 
+    if (az_norm >= 315 || az_norm < 45)
+        dir_str = 'West';
+    elseif (az_norm >= 45 && az_norm < 135)
+        dir_str = 'South';
+    elseif (az_norm >= 135 && az_norm < 225)
+        dir_str = 'East';
+    else
+        dir_str = 'North';
+    end
+    
+    % 生成标签字符串: (a) Moving East
+    fig_label_str = sprintf('\\bf(a) Moving %s', dir_str);
+    
+    annotation(f2, 'textbox',...
+        [0.1, 0.01, 0.8, 0.05],...
+        'String', fig_label_str,... % <--- 使用自动生成的英文标签
+        'FontSize', 14,...
+        'HorizontalAlignment', 'center',...
+        'VerticalAlignment', 'middle',...
+        'LineStyle', 'none',...
+        'BackgroundColor', 'w');
+    % =======================================================
+
+    fprintf('   Seg #%d: 方向 %.1f 度 (Moving %s) (相关性 %.2f) %s\n', i, az, dir_str, abs(corr_v), str_conflict);
 end
 fprintf('✅ 全流程分析完成！\n');

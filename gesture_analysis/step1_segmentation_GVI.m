@@ -1,10 +1,11 @@
 % =========================================================================
-% step1_segmentation_GVI.m (v5 - 加入SG滤波预处理)
+% step1_segmentation_GVI.m (v5.1 - 修复采样率Bug版)
 % 功能: 手势检测 Step 1 
-% 特性:
-%   1. [新增] 引入 Savitzky-Golay 预滤波，消除 SNR 量化噪声。
-%   2. [保持] 连通域合并逻辑，防止动作断裂。
-%   3. [保持] 统一的北京时间轴 (UTC+8 -20s)。
+% 改进记录:
+%   v5.1: [修复] 修正采样率自动识别逻辑，正确支持 25Hz 数据 (dt=0.04s)。
+%   v5.0: [新增] 引入 Savitzky-Golay 预滤波，消除 SNR 量化噪声。
+%   v4.x: [保持] 连通域合并逻辑，防止动作断裂。
+%   v4.x: [保持] 统一的北京时间轴 (UTC+8 -20s)。
 % =========================================================================
 
 %% 1. 准备工作与参数设置
@@ -12,21 +13,21 @@ clearvars -except obs_data nav_data;
 if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
 
 % --- 核心参数 ---
-PARA.smooth_window_sec = 1.5;  % 基线平滑窗口(秒)
+PARA.smooth_window_sec = 1.5;  % 基线平滑窗口(秒): 用于计算长时间背景基线
+PARA.gvi_threshold     = 6;    % GVI 阈值 (dB): 超过此值的波动才会被检测
 
-% [建议] 滤波后底噪会变低，建议尝试降低此阈值 (例如从 10 降到 5)
-PARA.gvi_threshold     = 6;    % GVI 阈值 (dB)
-
-PARA.sampling_rate     = 10;   % 初始采样率(会自动校准)
+% [修正] 默认采样率设为 25，后续会根据实际数据覆盖
+PARA.sampling_rate     = 25;   
 
 % 连通域参数 (解决 M 型波断裂)
 PARA.merge_gap_sec     = 0.5;  % 中间断开小于 0.5 秒视为不断开
 PARA.min_duration_sec  = 0.4;  % 小于 0.4 秒视为噪声
 
-fprintf('--> [Step 1] 开始手势检测 (带 SG 预滤波)...\n');
+fprintf('--> [Step 1] 开始手势检测 (v5.1 SG滤波 + 25Hz修复)...\n');
 
 %% 2. 数据提取与对齐
 all_sat_ids = {};
+% 扫描数据以获取所有卫星ID
 scan_range = unique([1:min(100, length(obs_data)), max(1, length(obs_data)-100):length(obs_data)]);
 for i = scan_range
     if ~isempty(obs_data(i).data), all_sat_ids = [all_sat_ids, fieldnames(obs_data(i).data)']; end
@@ -39,25 +40,37 @@ for i = 1:length(unique_sat_ids)
     if ismember(sid(1), ['G','C','E','J']), valid_sats{end+1} = sid; end
 end
 
+% === [核心修复] 采样率自动校准 ===
 raw_times = [obs_data.time];
 mean_dt = mean(diff(raw_times));
-if mean_dt < seconds(0.05), PARA.sampling_rate = 20;
-elseif mean_dt < seconds(0.2), PARA.sampling_rate = 10;
-else, PARA.sampling_rate = 1; end
+fprintf('    检测到数据平均时间间隔: %.4f 秒\n', seconds(mean_dt));
+
+if mean_dt < seconds(0.03)      % < 30ms (如 50Hz, dt=0.02)
+    PARA.sampling_rate = 50;
+elseif mean_dt < seconds(0.05)  % < 50ms (如 25Hz, dt=0.04) -> 命中这里
+    PARA.sampling_rate = 25;
+elseif mean_dt < seconds(0.12)  % < 120ms (如 10Hz, dt=0.10)
+    PARA.sampling_rate = 10;
+else
+    PARA.sampling_rate = 1; 
+end
+fprintf('    -> 自动匹配采样率为: %d Hz\n', PARA.sampling_rate);
 
 % 原始时间网格 (UTC)
 t_grid = (min(raw_times) : seconds(1/PARA.sampling_rate) : max(raw_times))'; 
 
-% 构建统一的绘图时间轴 (北京时间 + 修正)
+% 构建统一的绘图时间轴 (北京时间 + 20s跳秒修正)
 t_grid_plot = t_grid + hours(8) - seconds(20); 
 
 num_samples = length(t_grid);
 num_sats = length(valid_sats);
 
+% 提取 C/N0 矩阵
 cn0_matrix = NaN(num_samples, num_sats);
 for s_idx = 1:num_sats
     sat_id = valid_sats{s_idx};
     target_snr_code = '';
+    % 智能搜索可用的 SNR 信号类型
     for k = 1:min(50, length(obs_data)) 
         if isfield(obs_data(k).data, sat_id) && isfield(obs_data(k).data.(sat_id), 'snr')
             fields = fieldnames(obs_data(k).data.(sat_id).snr);
@@ -88,20 +101,17 @@ for s_idx = 1:num_sats
     end
 end
 
-%% =================== [新增] 2.5 核心预处理 ===================
-fprintf('--> [新增] 正在对 C/N0 矩阵进行 Savitzky-Golay 滤波...\n');
+%% =================== 2.5 核心预处理 (SG滤波) ===================
+fprintf('--> [预处理] 正在对 C/N0 矩阵进行 Savitzky-Golay 滤波...\n');
 
 % 备份原始数据 (用于绘图对比)
 cn0_matrix_raw = cn0_matrix; 
 
-% SG 滤波参数: 2阶多项式，7点窗口 (约0.7秒 @ 10Hz)
+% SG 滤波参数: 2阶多项式，7点窗口 (约0.28秒 @ 25Hz)
 % 作用: 填平量化台阶，去除单点毛刺，保留手势波形特征
 sg_order = 2;
 sg_len = 7; 
 
-% 对每一列(每一颗卫星)应用滤波
-% 注意: 如果数据中有 NaN，sgolayfilt 可能会扩散 NaN。
-% 这里做一个简单的 NaN 保护：如果整列有效数据太少则跳过，或者先填补 NaN
 for s = 1:num_sats
     col_data = cn0_matrix(:, s);
     valid_mask = ~isnan(col_data);
@@ -114,26 +124,24 @@ for s = 1:num_sats
         % 滤波
         filtered_col = sgolayfilt(filled_data, sg_order, sg_len);
         
-        % 将滤波结果写回 (仅写回原始非NaN的位置，或者保留填补后的值)
-        % 这里为了计算连续性，建议保留填补后的值
+        % 将滤波结果写回
         cn0_matrix(:, s) = filtered_col;
     end
 end
 fprintf('    滤波完成。现在的 cn0_matrix 更加平滑，底噪更低。\n');
-% =============================================================
 
 %% 3. 计算波动与分段 (连通域逻辑)
-% 这里的 cn0_matrix 已经是去噪后的版本，计算出的 volatility 会更纯粹
+% 这里的 cn0_matrix 已经是去噪后的版本
 cn0_smooth = movmean(cn0_matrix, round(PARA.smooth_window_sec * PARA.sampling_rate), 1, 'omitnan');
 volatility_matrix = abs(cn0_matrix - cn0_smooth);
 gvi_curve = sum(volatility_matrix, 2, 'omitnan');
-gvi_curve_clean = movmean(gvi_curve, 5);
+gvi_curve_clean = movmean(gvi_curve, 5); % 再做一次轻微平滑
 
 fprintf('--> 正在执行连通域分段...\n');
 
 is_active = gvi_curve_clean > PARA.gvi_threshold;
 
-% 填补缝隙
+% 填补缝隙 (Merge Gap)
 min_gap_idx = round(PARA.merge_gap_sec * PARA.sampling_rate);
 padded_active = [1; is_active; 1];
 gap_starts = find(diff(padded_active) == -1); 
@@ -148,11 +156,12 @@ for i = 1:length(gap_starts)
     end
 end
 
+% 提取分段 (Segments)
 edges = diff([0; is_active; 0]);
 s_indices = find(edges == 1);
 e_indices = find(edges == -1) - 1;
 
-segments = struct('start_idx', {}, 'end_idx', {}, 'peak_time', {}, 'peak_gvi', {});
+segments = struct('id', {}, 'start_idx', {}, 'end_idx', {}, 'peak_time', {}, 'peak_gvi', {}, 'peak_idx', {});
 num_segs = 0;
 min_dur_idx = round(PARA.min_duration_sec * PARA.sampling_rate);
 
@@ -175,12 +184,11 @@ end
 fprintf('✅ 识别到 %d 个手势片段。\n', num_segs);
 
 %% 4. 结果可视化
-figure('Name', 'Gesture Detection Analysis (Filtered)', 'Position', [50, 50, 1000, 800]);
+figure('Name', 'Gesture Detection Analysis (v5.1 Fixed)', 'Position', [50, 50, 1000, 800], 'Color', 'w');
 
-% --- 图1: C/N0 数据对比 (显示去噪效果) ---
+% --- 图1: C/N0 数据对比 ---
 subplot(3, 1, 1);
-% 为了不让图太乱，这里只画滤波后的数据，或者你可以选择画 raw
-plot(t_grid_plot, cn0_matrix); 
+plot(t_grid_plot, cn0_matrix); % 画滤波后的数据
 title(sprintf('1. 滤波后的全星座 C/N0 数据 (SG Filtered, %d sats)', num_sats));
 ylabel('SNR (Filtered)'); 
 xlabel('时间 (北京时间)');
@@ -197,8 +205,8 @@ end
 % --- 图2: 波动指数 GVI ---
 subplot(3, 1, 2);
 plot(t_grid_plot, gvi_curve_clean, 'k-', 'LineWidth', 1); hold on;
-yline(PARA.gvi_threshold, 'b--', '阈值');
-title(sprintf('2. 波动指数 (基于滤波数据), 阈值:%d', PARA.gvi_threshold));
+yline(PARA.gvi_threshold, 'b--', '阈值'); % 默认蓝色
+title(sprintf('2. 波动指数 (基于滤波数据), 阈值:%.1f', PARA.gvi_threshold));
 ylabel('GVI'); 
 xlabel('时间 (北京时间)');
 datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits');
@@ -264,194 +272,3 @@ disp(T_Index);
 
 fprintf('\n=== 表格 2: 北京时间信息 (UTC+8 -20s修正) ===\n');
 disp(T_Time);
-
-
-
-
-
-% 
-% 
-% 
-% %% 1. 准备工作
-% clearvars -except obs_data nav_data; % 保留已加载的数据，避免重复解析
-% if ~exist('obs_data', 'var')
-%     error('请先加载 obs_data! (运行 parse_rinex_obs.m)');
-% end
-% 
-% % 参数设置 (根据您的实验环境微调)
-% PARA.smooth_window_sec = 1.5;  % 滑动平均窗口大小 (秒)，用于计算基线
-% PARA.gvi_threshold     = 10;   % GVI触发阈值 (dB)，低于此值的波动被视为噪声
-% PARA.min_peak_dist     = 1.0;  % 最小峰值间隔 (秒)，防止同一个手势被切成两段
-% PARA.sampling_rate     = 10;   % 假设采样率为10Hz (或者根据数据自动计算)
-% 
-% fprintf('--> 正在提取全星座 C/N0 数据...\n');
-% 
-% %% 2. 提取并对齐所有卫星的 C/N0 数据
-% % 2.1 获取所有出现的卫星ID
-% all_sat_ids = {};
-% for i = 1:length(obs_data)
-%     if ~isempty(obs_data(i).data)
-%         all_sat_ids = [all_sat_ids, fieldnames(obs_data(i).data)'];
-%     end
-% end
-% unique_sat_ids = unique(all_sat_ids);
-% % 过滤只支持的系统 (G/C/E/J) - 根据您的analyze脚本逻辑
-% valid_sats = {};
-% for i = 1:length(unique_sat_ids)
-%     sid = unique_sat_ids{i};
-%     if ismember(sid(1), ['G','C','E','J']) 
-%         valid_sats{end+1} = sid; 
-%     end
-% end
-% fprintf('    共识别到 %d 颗有效卫星。\n', length(valid_sats));
-% 
-% % 2.2 构建统一时间轴
-% raw_times = [obs_data.time];
-% % 转换为北京时间用于绘图
-% t_grid = (min(raw_times) : seconds(1/PARA.sampling_rate) : max(raw_times))'; 
-% num_samples = length(t_grid);
-% num_sats = length(valid_sats);
-% 
-% % 2.3 构建 C/N0 矩阵 [时间 x 卫星]
-% cn0_matrix = NaN(num_samples, num_sats);
-% 
-% for s_idx = 1:num_sats
-%     sat_id = valid_sats{s_idx};
-%     % 确定该卫星使用的 SNR 代码 (参考您的 analyze 脚本)
-%     sys = sat_id(1);
-%     if sys == 'C', snr_code = 'S2I'; else, snr_code = 'S1C'; end 
-%     
-%     % 提取该卫星的时间和SNR
-%     s_times = [];
-%     s_cn0   = [];
-%     for k = 1:length(obs_data)
-%         if isfield(obs_data(k).data, sat_id) && ...
-%            isfield(obs_data(k).data.(sat_id), 'snr') && ...
-%            isfield(obs_data(k).data.(sat_id).snr, snr_code)
-%             
-%             val = obs_data(k).data.(sat_id).snr.(snr_code);
-%             if ~isnan(val) && val > 0
-%                 s_times = [s_times; obs_data(k).time]; %#ok<AGROW>
-%                 s_cn0   = [s_cn0; val]; %#ok<AGROW>
-%             end
-%         end
-%     end
-%     
-%     % 对齐到统一时间轴 (线性插值)
-%     if length(s_times) > 10
-%         % 去重
-%         [u_times, u_idx] = unique(s_times);
-%         u_cn0 = s_cn0(u_idx);
-%         % 插值填充
-%         cn0_matrix(:, s_idx) = interp1(u_times, u_cn0, t_grid, 'linear', NaN);
-%     end
-% end
-% % 将NaN (无信号) 替换为0，避免计算出错，或者保持NaN不参与计算
-% % 这里我们保持NaN，但在计算GVI时忽略NaN
-% 
-% %% 3. 计算全局波动指数 (GVI)
-% fprintf('--> 正在计算 GVI...\n');
-% 
-% % 3.1 计算每颗星的波动量 V_k(t)
-% % 方法：原始值 - 平滑基线
-% window_points = round(PARA.smooth_window_sec * PARA.sampling_rate);
-% cn0_smooth = movmean(cn0_matrix, window_points, 1, 'omitnan');
-% volatility_matrix = abs(cn0_matrix - cn0_smooth);
-% 
-% % 3.2 求和得到 GVI (忽略NaN)
-% gvi_curve = sum(volatility_matrix, 2, 'omitnan');
-% 
-% % 3.3 对 GVI 自身再做一次轻微平滑，去除尖刺噪声
-% gvi_curve_clean = movmean(gvi_curve, 5); 
-% 
-% %% 4. 核心：切割波动段 (Segmentation)
-% fprintf('--> 正在执行分段识别...\n');
-% 
-% % 使用 findpeaks 寻找显著的波动事件
-% % MinPeakHeight: GVI必须超过此值才算事件
-% % MinPeakDistance: 两个手势之间的最小间隔
-% [pks, locs, w, p] = findpeaks(gvi_curve_clean, ...
-%     'MinPeakHeight', PARA.gvi_threshold, ...
-%     'MinPeakDistance', PARA.min_peak_dist * PARA.sampling_rate, ...
-%     'WidthReference', 'halfheight');
-% 
-% % 定义段的开始和结束
-% % 简单策略：以峰值为中心，左右各扩展一定的宽度，或者寻找下降到阈值的时间点
-% segments = struct('start_idx', {}, 'end_idx', {}, 'peak_time', {}, 'peak_gvi', {});
-% 
-% for i = 1:length(locs)
-%     peak_idx = locs(i);
-%     
-%     % 向左搜索开始点 (GVI 降到 阈值的 20% 以下)
-%     start_idx = peak_idx;
-%     while start_idx > 1 && gvi_curve_clean(start_idx) > (0.2 * pks(i))
-%         start_idx = start_idx - 1;
-%     end
-%     
-%     % 向右搜索结束点
-%     end_idx = peak_idx;
-%     while end_idx < num_samples && gvi_curve_clean(end_idx) > (0.2 * pks(i))
-%         end_idx = end_idx + 1;
-%     end
-%     
-%     segments(i).start_idx = start_idx;
-%     segments(i).end_idx = end_idx;
-%     segments(i).peak_time = t_grid(peak_idx);
-%     segments(i).peak_gvi = pks(i);
-% end
-% 
-% fprintf('✅ 成功识别到 %d 个手势波动段！\n', length(segments));
-% 
-% %% 5. 可视化结果
-% figure('Name', 'GVI Segmentation', 'Position', [100, 100, 1000, 600]);
-% 
-% % 上图：所有卫星的 C/N0 叠画
-% subplot(2,1,1);
-% plot(t_grid + hours(8), cn0_matrix); % 转北京时间
-% title(sprintf('全星座 C/N0 原始数据 (%d 颗卫星)', num_sats));
-% ylabel('SNR (dB-Hz)');
-% grid on;
-% axis tight;
-% datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits');
-% 
-% % 下图：GVI 曲线与识别结果
-% subplot(2,1,2);
-% plot(t_grid + hours(8), gvi_curve_clean, 'k', 'LineWidth', 1.5); hold on;
-% ylabel('全局波动指数 (GVI)');
-% xlabel('时间 (北京时间)');
-% title(sprintf('GVI 指数与分段结果 (阈值: %.1f)', PARA.gvi_threshold));
-% 
-% % 绘制识别出的段
-% y_limits = ylim;
-% for i = 1:length(segments)
-%     t_start = t_grid(segments(i).start_idx) + hours(8);
-%     t_end   = t_grid(segments(i).end_idx) + hours(8);
-%     
-%     % 绘制高亮区域
-%     patch([t_start t_end t_end t_start], ...
-%           [y_limits(1) y_limits(1) y_limits(2) y_limits(2)], ...
-%           'r', 'FaceAlpha', 0.2, 'EdgeColor', 'none');
-%       
-%     % 标记峰值
-%     text(t_grid(segments(i).peak_time == t_grid) + hours(8), ...
-%          segments(i).peak_gvi, ...
-%          sprintf('Seg #%d', i), 'Vert', 'bottom', 'Horiz', 'center');
-% end
-% grid on;
-% datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits');
-% 
-% %% 6. (可选) 输出第一段的数据供下一步分析
-% if ~isempty(segments)
-%     fprintf('\n准备进入难点2分析...\n');
-%     fprintf('Seg #1 范围: %s 到 %s\n', ...
-%         datestr(t_grid(segments(1).start_idx)+hours(8), 'HH:MM:SS.fff'), ...
-%         datestr(t_grid(segments(1).end_idx)+hours(8), 'HH:MM:SS.fff'));
-%     
-%     % 将波动量矩阵传递给下一步
-%     % segment_volatility = volatility_matrix(segments(1).start_idx:segments(1).end_idx, :);
-% end
-% 
-% 
-% 
-% 
-% 

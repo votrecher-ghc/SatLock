@@ -185,6 +185,6 @@ for s = 1:num_sats
     ylim(ylim_val);
     datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits');
 
-    if plot_cnt >= 10, fprintf('⚠️ 已显示前 10 颗卫星...\n'); break; end
+    if plot_cnt >= 50, fprintf('⚠️ 已显示前 10 颗卫星...\n'); break; end
 end
 fprintf('✅ 完毕。\n');

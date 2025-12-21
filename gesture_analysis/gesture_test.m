@@ -3,8 +3,8 @@ clear;
 clc; 
 close all;
 %%
-obs_filepath = 'fingure_little_A_12_12_2.obs'; 
-nav_filepath = 'arounds_12_12_1.nav'; 
+obs_filepath = 'fingure_200_10_30_1.obs'; 
+nav_filepath = 'arounds_10_30_1.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);
@@ -27,7 +27,7 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 %旧方法
 
 %手势切片
-% step1_segmentation_GVI;
+step1_segmentation_GVI;
 
 %切片手势识别方向
 % step2_direction_estimation;
@@ -61,9 +61,9 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 
 %连续手势识别，重心聚类，会导致重心偏移 
 %12.17修为仰角加权，极度抑制低仰角卫星
-run_gesture_analysis_continuous_track
+% run_gesture_analysis_continuous_track
 
 %连续手势识别，边界识别---远端
-run_gesture_analysis_boundary_trackV3
+% run_gesture_analysis_boundary_trackV3
 
 % run_gesture_analysis_boundary_track

@@ -11,61 +11,60 @@ obs_data = parse_rinex_obs(obs_filepath);
 fprintf('--> 正在解析导航文件: %s\n', nav_filepath);
 nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 
-%%
+
+obs_data = generate_ideal_multi_shape(obs_data, nav_data, 'Star');
 % fprintf('\n✅ 文件解析全部完成\n\n');
 % calculate_and_plot_all_skyplot(obs_data, nav_data);
-% generate_ideal_multi_shape
-%%
-%统计卫星在仰角范围内的数量
-% % 3. 设置参数
-% target_elevation = 60; % 方案A的阈值：30度
-% 
-% % 4. 调用统计函数
-% %    我们取 OBS 数据的第 100 个历元（或者中间历元）进行测试，避免开头数据不稳定
-% test_epoch = floor(length(obs_data) / 2); 
-% 
-% [count, sat_ids] = count_high_elevation_satellites(obs_data, nav_data, target_elevation);
+
 %%
 %旧方法
 
 %手势切片
-% step1_segmentation_GVI;
+% [segments, volatility, t_grid, sats, PARA] = step1_segmentation_GVI(obs_data);
 
 %切片手势识别方向
-% step2_direction_estimation;
+% step2_direction_estimation(obs_data, nav_data, segments, volatility, t_grid, sats);
 
 %%
 
 %可视化感知范围
-% visualize_sensing_range
+% visualize_sensing_range(obs_data, nav_data);
 %%
 
 %模拟GNSS欺骗
-% simulate_gnss_spoofing
+% obs_replay = simulate_gnss_spoofing(obs_data, nav_data, 'REPLAY');
 
 %%
 %旧方法
 
 %测试aheadN预处理算法
-% test_snr_flattening
+% [clean_snr, sat_ids, t_axis] = test_snr_flattening(obs_data, nav_data);
 
 %aheadN预处理算法处理后利用切片识别方向算法，带手臂去除
-% run_gesture_analysis_robust_aheadN
+% [draw_vecs1, segments1] = run_gesture_analysis_robust_aheadN(obs_data, nav_data);
 
 
-% run_gesture_analysis_3d_pipeline
+% [analysis_results, segments] = run_gesture_analysis_3d_pipeline(obs_data, nav_data);
 %%
 %测试baseline预处理算法
-% test_snr_baseline_algorithm
+% [clean_snr_matrix, sat_ids, t_axis] = test_snr_baseline_algorithm(obs_data, nav_data);
 
 %baseline预处理算法处理后利用切片识别方向算法，带手臂去除
-% run_gesture_analysis_robust_baseline
+% [draw_vecs, segments] = run_gesture_analysis_robust_baseline(obs_data, nav_data);
+
+
 
 %连续手势识别，重心聚类，会导致重心偏移 
 %12.17修为仰角加权，极度抑制低仰角卫星
-run_gesture_analysis_continuous_track
-run_gesture_analysis_continuous_track_line
-%连续手势识别，边界识别---远端
-run_gesture_analysis_boundary_trackV3
 
-% run_gesture_analysis_boundary_track
+
+%第二步的轨迹推演需要这一步的参数，将obs_clean单独拎出来方便进行下一步特征归一化，
+% obs_clean就是经过baseline处理过的os文件
+[obs_clean, step1_res] = gesture_analysis_baseline_gvi(obs_data);
+
+% run_gesture_analysis_continuous_track(obs_clean, nav_data, step1_res);
+run_gesture_analysis_continuous_track_line(obs_clean, nav_data, step1_res);
+
+    %还需要加入方向约束
+run_gesture_analysis_boundary_trackV3(obs_clean, nav_data, step1_res);
+run_gesture_analysis_boundary_track(obs_clean, nav_data, step1_res);

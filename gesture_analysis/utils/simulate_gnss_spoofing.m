@@ -1,75 +1,93 @@
 % =========================================================================
-% simulate_gnss_spoofing_v2.m
-% 功能: 基于"物理特征缺失"的攻击仿真
+% simulate_gnss_spoofing.m (函数版)
+% 功能: 基于"物理特征缺失"的攻击仿真 (v2.0)
 % 核心思想: 
-%   1. SDR攻击: 只有SDR物理方向有波动，其余方向因物理缺失而呈平滑直线。
-%   2. 重放攻击: 数据中完全没有当前手势的物理特征，全星座均为平滑直线。
+%   1. SDR攻击: 模拟单源欺骗。只有在SDR发射机波束范围内的卫星保留波动(模拟遮挡)，
+%      其余方向卫星因物理缺失，信号被替换为平滑直线(环境噪声)。
+%   2. 重放攻击: 模拟无动作重放。所有卫星信号均为平滑直线，完全没有当前手势的物理遮挡特征。
+%
+% [调用格式]:
+%   obs_spoofed = simulate_gnss_spoofing(obs_data, nav_data, ATTACK_TYPE);
+%
+% [输入参数]:
+%   1. obs_data: 原始观测数据。
+%   2. nav_data: 导航星历数据(用于计算卫星几何分布)。
+%   3. ATTACK_TYPE: 攻击模式字符串。
+%      - 'SDR'   : 单源物理遮挡攻击 (保留特定方向波动)。
+%      - 'REPLAY': 全星座重放攻击 (全部抹平)。
+%
+% [返回值]:
+%   obs_spoofed: 被注入欺骗特征后的观测数据。
 % =========================================================================
 
-%% 1. 基础设置与数据备份
-clearvars -except obs_data nav_data;
-if ~exist('obs_data', 'var'), error('请先加载正常数据 obs_data!'); end
+function obs_spoofed = simulate_gnss_spoofing(obs_data, nav_data, ATTACK_TYPE)
 
-% 备份原始数据 (以便恢复)
-if ~exist('obs_data_backup', 'var')
-    obs_data_backup = obs_data;
-    fprintf('📦 已备份原始数据至 obs_data_backup\n');
-else
-    obs_data = obs_data_backup; % 每次运行前先恢复
-    fprintf('🔄 已从备份恢复原始数据\n');
-end
-
-% --- 攻击配置 ---
-ATTACK_TYPE = 'REPLAY';  % 可选: 'SDR' (单源物理遮挡) 或 'REPLAY' (无动作重放)
-SDR_AZIMUTH = 120;    % 假设 SDR 发射机位于方位角 120 度
-SDR_BEAM_WIDTH = 30;  % SDR 物理遮挡的波束宽度 (度)
-
-fprintf('⚠️  正在构建 [%s] 攻击仿真环境...\n', ATTACK_TYPE);
-
-%% 2. 提取卫星几何信息 (用于判断哪些卫星在 SDR 方向)
-% 我们需要知道每颗卫星的方位角，以便决定是保留还是抹平
-fprintf('   正在计算卫星几何分布...\n');
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('sky_plot'));
 
-% 选取一个中间时刻计算几何 (近似认为手势期间卫星位置不变)
-mid_idx = round(length(obs_data)/2);
-[rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, mid_idx);
-if isempty(rec_pos), error('无法计算接收机位置，仿真终止'); end
-[lat, lon, alt] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
+fprintf('--> 启动攻击仿真 (Function版): Mode = [%s]...\n', ATTACK_TYPE);
 
+%% 1. 基础设置
+% 初始化输出数据 (复制一份，避免修改原数据)
+obs_spoofed = obs_data;
+
+% --- 内部参数配置 ---
+SDR_AZIMUTH    = 120;   % [SDR参数] 发射机方位角 (度)
+SDR_BEAM_WIDTH = 30;    % [SDR参数] 物理遮挡的有效波束宽度 (度)
+
+%% 2. 提取卫星几何信息
+% (用于 SDR 模式：判断哪些卫星位于发射机方向)
+fprintf('   正在计算卫星几何分布...\n');
+
+% 选取中间时刻计算几何 (近似认为手势期间卫星相对位置不变)
+mid_idx = round(length(obs_data)/2);
+try
+    [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, mid_idx);
+    if isempty(rec_pos), error('接收机位置计算失败'); end
+    [lat, lon, alt] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
+catch ME
+    warning('无法计算几何分布，将降级为全星座处理: %s', ME.message);
+    sat_states = struct();
+end
+
+% 构建卫星方位角映射表
 sat_azimuths = containers.Map;
-sat_list = fieldnames(sat_states);
-for k = 1:length(sat_list)
-    sid = sat_list{k};
-    sat_pos = sat_states.(sid).position;
-    [e, n, ~] = ecef2enu(sat_pos(1)-rec_pos(1), sat_pos(2)-rec_pos(2), sat_pos(3)-rec_pos(3), lat, lon, alt);
-    az = atan2d(e, n); if az < 0, az = az + 360; end
-    sat_azimuths(sid) = az;
+if ~isempty(fieldnames(sat_states))
+    sat_list = fieldnames(sat_states);
+    for k = 1:length(sat_list)
+        sid = sat_list{k};
+        sat_pos = sat_states.(sid).position;
+        [e, n, ~] = ecef2enu(sat_pos(1)-rec_pos(1), sat_pos(2)-rec_pos(2), sat_pos(3)-rec_pos(3), lat, lon, alt);
+        az = atan2d(e, n); if az < 0, az = az + 360; end
+        sat_azimuths(sid) = az;
+    end
 end
 
 %% 3. 执行攻击 (数据篡改)
-
-num_samples = length(obs_data);
+num_samples = length(obs_spoofed);
 flatten_count = 0;
 keep_count = 0;
 
 for i = 1:num_samples
-    if isempty(obs_data(i).data), continue; end
-    sats = fieldnames(obs_data(i).data);
+    if isempty(obs_spoofed(i).data), continue; end
+    sats = fieldnames(obs_spoofed(i).data);
     
     for k = 1:length(sats)
         sid = sats{k};
         
-        % 获取原始 C/N0 (假设 S1C 或 S2I)
+        % 智能查找 SNR 字段 (S1C, S2I, S1I 等)
         target_field = '';
-        if isfield(obs_data(i).data.(sid).snr, 'S1C'), target_field = 'S1C';
-        elseif isfield(obs_data(i).data.(sid).snr, 'S2I'), target_field = 'S2I';
-        elseif isfield(obs_data(i).data.(sid).snr, 'S1I'), target_field = 'S1I';
+        snr_struct = obs_spoofed(i).data.(sid).snr;
+        if isfield(snr_struct, 'S1C'), target_field = 'S1C';
+        elseif isfield(snr_struct, 'S2I'), target_field = 'S2I';
+        elseif isfield(snr_struct, 'S1I'), target_field = 'S1I';
+        elseif ~isempty(fieldnames(snr_struct))
+             % 兜底: 取第一个字段
+             fns = fieldnames(snr_struct); target_field = fns{1};
         end
         
         if isempty(target_field), continue; end
-        original_val = obs_data(i).data.(sid).snr.(target_field);
+        original_val = obs_spoofed(i).data.(sid).snr.(target_field);
         if isnan(original_val) || original_val == 0, continue; end
         
         % --- 核心逻辑: 决定是保留波动还是抹平 ---
@@ -88,24 +106,26 @@ for i = 1:num_samples
                 if diff_az > 180, diff_az = 360 - diff_az; end
                 
                 if diff_az > SDR_BEAM_WIDTH / 2
-                    % 卫星不在 SDR 物理波束内 -> 手挡不到 -> 应该是平的
+                    % 卫星不在 SDR 物理波束内 -> 无法被手遮挡 -> 应该是平的
                     should_flatten = true;
                 else
-                    % 卫星在 SDR 方向 -> 手挡住了 SDR -> 保留波动 (或注入波动)
+                    % 卫星在 SDR 方向 -> 能被手遮挡 -> 保留真实波动
                     should_flatten = false;
                 end
             else
-                should_flatten = true; % 未知位置的卫星默认抹平
+                % 几何未知的卫星，默认抹平以防漏网
+                should_flatten = true; 
             end
+        else
+            error('未知的攻击类型: %s (支持 SDR / REPLAY)', ATTACK_TYPE);
         end
         
         % --- 执行抹平操作 ---
         if should_flatten
-            % 使用一个带噪声的常数来模拟"环境声曲线"
-            % 这里简单取 40 dB 作为基准，加一点点高斯白噪
-            % (更高级的做法是取该卫星前段时间的均值)
-            noise = randn(1) * 1; 
-            obs_data(i).data.(sid).snr.(target_field) = 42 + noise; 
+            % 使用平滑基线替代原始信号
+            % 这里简单取 42 dB 作为基准，加微量白噪模拟接收机热噪
+            noise = randn(1) * 0.5; 
+            obs_spoofed(i).data.(sid).snr.(target_field) = 42 + noise; 
             flatten_count = flatten_count + 1;
         else
             keep_count = keep_count + 1;
@@ -114,17 +134,9 @@ for i = 1:num_samples
 end
 
 %% 4. 结果摘要
-fprintf('\n=== 仿真结果 [%s] ===\n', ATTACK_TYPE);
+fprintf('   仿真完成: 抹平点数 %d, 保留点数 %d\n', flatten_count, keep_count);
 if strcmp(ATTACK_TYPE, 'SDR')
-    fprintf('   SDR物理方位: %.1f° (波束宽 %.1f°)\n', SDR_AZIMUTH, SDR_BEAM_WIDTH);
-    fprintf('   -> 位于 SDR 波束内的卫星保留了真实波动 (模拟遮挡SDR)。\n');
-    fprintf('   -> 其他方向卫星已被替换为平滑环境噪声 (模拟物理缺失)。\n');
-else
-    fprintf('   -> 全星座数据已被替换为平滑环境噪声 (模拟无动作重放)。\n');
+    fprintf('   [SDR Info] Azimuth: %.1f°, BeamWidth: %.1f°\n', SDR_AZIMUTH, SDR_BEAM_WIDTH);
 end
-fprintf('   (受影响采样点: 抹平 %d 个, 保留 %d 个)\n', flatten_count, keep_count);
-
-fprintf('\n👉 下一步: 请运行 run_gesture_analysis_boundary_trackV3.m 查看防御效果。\n');
-fprintf('   预期结果: \n');
-fprintf('   1. SDR模式: 可能检测到少量 Hit 卫星，但因数量不足或分布过于集中，无法解算出有效轨迹。\n');
-fprintf('   2. Replay模式: GVI 能量极低，直接提示 "未检测到有效手势片段"。\n');
+fprintf('✅ 已返回欺骗后的数据结构 obs_spoofed。\n');
+end

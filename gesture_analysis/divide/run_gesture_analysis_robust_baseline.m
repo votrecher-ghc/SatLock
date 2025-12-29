@@ -1,22 +1,43 @@
 % =========================================================================
-% run_gesture_analysis_robust.m
-% 功能: 鲁棒手势感知全流程 (v11.0 - 基准线趋势算法版)
-% 核心更新:
-%   [Step 0] 预处理算法更换为 "全局基准线 + 窗口趋势判定"。
-%            利用环境底噪的统计特性(众数)，强力压制震荡，仅保留显著趋势。
+% run_gesture_analysis_robust_baseline.m
+% 功能: 鲁棒手势感知 - 全流程矢量分析版 (v11.0)
+% 描述:
+%   集成了最完整的抗噪与分析流程。
+%   采用"全局基准线 + 趋势窗口"算法进行深度的信号清洗，并利用 SG 滤波
+%   和 GVI 能量分段提取独立笔画。最终通过 RANSAC 算法拟合出每一笔的
+%   矢量方向，而非离散的点云。
+%
+% [调用格式]:
+%   [final_draw_data, segments] = run_gesture_analysis_robust_baseline(obs_data, nav_data);
+%
+% [返回值说明]:
+%   1. final_draw_data (struct数组): 
+%      存储最终提取出的 [笔画矢量] 信息。每个元素包含:
+%      - .start: [x, y] 起点坐标。
+%      - .end:   [x, y] 终点坐标。
+%      - .vec:   [dx, dy] 笔画矢量方向与长度。
+%      - .id:    笔画序号。
+%
+%   2. segments (struct数组):
+%      存储时域分段信息 (用于调试)。包含:
+%      - .start_idx / .end_idx: 分段在原始数据中的索引范围。
+%      - .peak_time: 该动作能量峰值的时刻。
+%
+% [核心算法]:
+%   1. Baseline Trend Cleaning: 利用众数锁定基准线，剔除震荡，保留单调趋势。
+%   2. GVI Segmentation: 基于全局能量波动的动作区间检测。
+%   3. RANSAC Vector Fitting: 在点云噪声中拟合最佳直线矢量。
 % =========================================================================
 
-%% ================= [Part 1] 环境检查与参数设置 =================
-clearvars -except obs_data nav_data; 
-if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
+function [final_draw_data, segments] = run_gesture_analysis_robust_baseline(obs_data, nav_data)
 
 addpath(genpath('sky_plot')); 
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('nav_parse'));
 
-fprintf('--> 启动鲁棒手势感知分析 (Baseline Trend Algorithm)...\n');
+fprintf('--> 启动鲁棒手势感知分析 (Function版 v11.0: Baseline Trend Algorithm)...\n');
 
-% --- 参数设置 ---
+%% ================= [Part 1] 参数设置 =================
 
 % [Step 0: 信号预处理参数 (Baseline Algorithm)]
 PARA.diff_lag_N         = 8;     % 趋势窗口 (N点): 用于判断窗口内的单调性/震荡
@@ -405,4 +426,5 @@ if cnt > 0
         xlim(ax_f, xl + [-0.5 0.5]); ylim(ax_f, yl + [-0.5 0.5]); legend('Location', 'bestoutside');
     end
 end
-fprintf('✅ 所有分析完成。\n');
+fprintf('✅ v11.0 分析完成 (已返回矢量数据)。\n');
+end

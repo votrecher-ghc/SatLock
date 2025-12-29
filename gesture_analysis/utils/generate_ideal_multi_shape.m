@@ -1,25 +1,45 @@
 % =========================================================================
-% generate_ideal_multi_shape_v7_switch.m
-% 功能: 通用仿真生成器 (支持 A, B, M, Star, D, L, N, X, Z)
-% 特性: 
-%   1. [Switch Case]: 集成所有字母坐标，通过 TARGET_LETTER 切换。
-%   2. [Base V4]: 严格保留了 v4 版的手臂遮挡、长间隔和绘图逻辑。
+% generate_ideal_multi_shape.m 
+% 功能: 通用仿真信号生成器 (v7.0)
+% 描述: 
+%   该函数用于在真实的观测数据基础上，注入模拟的手势遮挡信号。
+%   通过修改原始观测数据的信噪比 (SNR/CN0) 字段，生成具有特定几何形状
+%   (如 Star, A, B 等) 的仿真数据，用于验证算法的理想性能。
+%
+% [调用格式]:
+%   obs_sim = generate_ideal_multi_shape(obs_data, nav_data, TARGET_LETTER);
+%
+% [输入参数]:
+%   1. obs_data (struct数组): 
+%      原始观测数据结构体 (由 parse_rinex_obs 读取)。
+%      提供真实的卫星时间戳、列表和基础底噪。
+%   2. nav_data (struct结构体): 
+%      导航星历数据 (由 parse_rinex_nav_multi_gnss 读取)。
+%      用于计算真实的卫星位置 (Azimuth/Elevation)。
+%   3. TARGET_LETTER (char/string): 
+%      目标形状指令。支持: 'A', 'B', 'M', 'Star', 'D', 'L', 'N', 'X', 'Z'。
+%
+% [返回值说明]:
+%   1. obs_sim (struct数组): 
+%      注入了仿真信号后的观测数据。
+%      - 结构与输入 obs_data 完全一致。
+%      - 仅 .snr (信噪比) 数值被修改，模拟了手势遮挡产生的信号下降。
+%
+% [核心逻辑]:
+%   1. 几何投影: 根据手势平面的假设高度，计算卫星视线与平面的交点。
+%   2. 遮挡判定: 判断交点是否落在目标形状的线条 (Line Segment) 及其宽度范围内。
+%   3. 信号注入: 若判定为遮挡，将 SNR 减去设定的衰减值 (如 15dB)。
 % =========================================================================
 
-clearvars -except obs_data nav_data;
-
-% --- [用户设置] 请在这里修改要生成的形状 ---
-TARGET_LETTER = 'Star';  % 可选: 'A', 'B', 'M', 'Star', 'D', 'L', 'N', 'X', 'Z'
+function obs_data = generate_ideal_multi_shape(obs_data, nav_data, TARGET_LETTER)
 
 % --- [Part 0] 环境与数据检查 ---
-if ~exist('obs_data', 'var') || ~exist('nav_data', 'var')
-    error('错误: 工作区缺少数据模板！请先加载一份真实的 obs_data 和 nav_data。');
-end
+% (已移除脚本专用的 clearvars)
 
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('nav_parse'));
 
-fprintf('--> 启动仿真 V7 (Switch版): 目标 [%s]...\n', TARGET_LETTER);
+fprintf('--> 启动仿真 V7 (Function版): 目标 [%s]...\n', TARGET_LETTER);
 
 %% ================= [Part 1] 仿真参数设置 =================
 
@@ -239,7 +259,7 @@ for t_idx = 1 : num_samples
         for f = 1:length(fields), ideal_obs(t_idx).data.(sid).snr.(fields{f}) = sim_val; end
     end
 end
-obs_data = ideal_obs; % 更新工作区
+obs_data = ideal_obs; % 更新输出数据
 
 %% ================= [Part 4] Ground Truth 可视化 =================
 fprintf('--> 生成 Ground Truth 轨迹图...\n');
@@ -286,4 +306,5 @@ end
 xlim([-max_range*1.2, max_range*1.2]);
 ylim([-max_range*1.2, max_range*1.2] + SIM.body_pos(2)/2); 
 
-fprintf('✅ 仿真与绘图全部完成。请运行分析脚本进行测试。\n');
+fprintf('✅ 仿真与绘图全部完成 (已返回修改后的 obs_data)。\n');
+end

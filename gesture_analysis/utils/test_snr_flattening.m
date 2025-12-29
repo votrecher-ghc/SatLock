@@ -1,23 +1,61 @@
 % =========================================================================
-% test_snr_smart_flatten.m
+% test_snr_flattening.m (函数版)
 % 功能: 验证 "智能削平" 算法 (v11.1 - 整数逻辑优化版)
-% 改进:
-%   1. [参数逻辑] 明确判定条件为 <= 阈值。设为1即过滤1dB及以内的波动。
-%   2. [核心功能] 保持宽毛刺剔除、稳态锁死、趋势保留功能。
+% 描述:
+%   这是一个用于验证信号预处理效果的调试工具。
+%   它实现了一种"智能削平"逻辑，旨在保留显著的信号跳变(台阶)，同时
+%   强力抹平微小的观测噪声和瞬间的宽毛刺。
+%   该算法模拟了实时处理过程(逐点推进)，适用于流式应用。
+%
+% [调用格式]:
+%   [cn0_flat, valid_sats, t_grid] = test_snr_flattening(obs_data, nav_data);
+%
+% [输入参数]:
+%   1. obs_data (struct数组): 原始观测数据。
+%   2. nav_data (struct结构体): (可选) 导航星历数据(仅作占位，保持接口统一)。
+%
+% [返回值说明]:
+%   1. cn0_flat (double矩阵): 
+%      [处理后] 的信噪比矩阵。震荡已被削平，呈现干净的台阶状。
+%   2. valid_sats (cell数组): 
+%      对应的卫星ID列表。
+%   3. t_grid (datetime列向量): 
+%      对应的时间轴。
+%
+% [核心算法]:
+%   1. 宽毛刺剔除 (Wide Spike Removal): 
+%      检测大幅跳变，若在 N 点内迅速回弹至原值，则视为干扰并剔除。
+%   2. 智能稳态锁死 (Steady-State Locking):
+%      若当前值与上一时刻值的偏差 <= 阈值，强制保持上一时刻值不变(削平)。
+%   3. 趋势更新 (Trend Update):
+%      仅当偏差 > 阈值且非毛刺时，才更新信号电平，形成台阶。
 % =========================================================================
 
-%% 1. 环境检查与参数设置
-clearvars -except obs_data nav_data;
-if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
+function [cn0_flat, valid_sats, t_grid] = test_snr_flattening(obs_data, nav_data)
 
-fprintf('--> 启动智能削平验证 (Integer Logic Fix)...\n');
+addpath(genpath('sky_plot')); 
+addpath(genpath('calculate_clock_bias_and_positon'));
+addpath(genpath('nav_parse'));
 
-% --- [核心参数 - 请根据实际调整] ---
-PARA.diff_lag_N         = 5;     % 趋势窗口 (N点): 用于识别缓坡台阶
-PARA.noise_cutoff_db    = 1;     % 噪声阈值 (dB): 波动幅度 <= 此值时视为噪声被削平
-PARA.spike_th_db        = 2;     % 毛刺幅度阈值 (dB): 跳变 > 此值才检查毛刺 (建议设为比噪声阈值大一点)
-PARA.spike_max_duration = 5;     % 毛刺最大持续点数 (1-3): 允许毛刺宽一点
-PARA.sampling_rate      = 25;    % 采样率 (Hz)
+fprintf('--> 启动智能削平验证 (Function版 v11.1: Integer Logic Fix)...\n');
+
+%% 1. 参数设置
+
+% --- [核心参数] ---
+PARA.diff_lag_N         = 5;     % [趋势] 趋势窗口 (N点): 用于辅助判断长时趋势
+PARA.noise_cutoff_db    = 1;     % [去噪] 噪声阈值 (dB): 波动幅度 <= 此值时视为噪声被削平
+PARA.spike_th_db        = 2;     % [去噪] 毛刺幅度阈值 (dB): 跳变 > 此值才检查毛刺
+PARA.spike_max_duration = 5;     % [去噪] 毛刺最大持续点数 (1-5): 允许剔除较宽的毛刺
+PARA.sampling_rate      = 25;    % [采样] 默认采样率，后续会自动校正
+
+% 自动计算采样率
+raw_times = [obs_data.time];
+mean_dt = mean(diff(raw_times));
+if ~isnan(mean_dt)
+    PARA.sampling_rate = round(1 / seconds(mean_dt));
+end
+fprintf('   当前采样率: %d Hz\n', PARA.sampling_rate);
+
 
 %% 2. 数据提取
 fprintf('--> [计算] 正在提取全星座数据...\n');
@@ -31,7 +69,6 @@ for i = 1:length(unique_sat_ids)
     if ismember(sid(1), ['G','C','E','J']), valid_sats{end+1} = sid; end
 end
 
-raw_times = [obs_data.time];
 t_grid = (min(raw_times) : seconds(1/PARA.sampling_rate) : max(raw_times))';
 t_grid_plot = t_grid + hours(8) - seconds(18);
 num_samples = length(t_grid);
@@ -144,7 +181,7 @@ for s = 1:num_sats
     cn0_flat(:, s) = col;
 end
 
-fprintf('✅ 计算完成。\n');
+fprintf('✅ 计算完成 (已返回处理后的 SNR 矩阵)。\n');
 
 %% 4. 绘图
 fprintf('--> [绘图] 生成对比图...\n');
@@ -173,4 +210,5 @@ for s = 1:num_sats
 
     if plot_cnt >= 10, fprintf('⚠️ 已显示前 10 颗卫星...\n'); break; end
 end
-fprintf('✅ 完毕。\n');
+fprintf('✅ 绘图完毕。\n');
+end

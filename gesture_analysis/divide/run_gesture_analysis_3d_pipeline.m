@@ -1,20 +1,45 @@
 % =========================================================================
-% run_gesture_analysis_3d_separate_v3.m
-% 功能: 手势感知全流程 (独立窗口 + 几何约束可视化版)
-% 改进:
-%   1. [Figure 1] 3D 视图：展示射线、手势平面和空间几何关系。
-%   2. [Figure 2] 2D 俯视图：(新增) 专注于手势平面上的点云拟合与排斥约束验证。
-%   3. [优化] 颜色加深，视觉效果更清晰。
+% run_gesture_analysis_3d_pipeline.m (函数版)
+% 功能: 手势感知全流程 - 3D 几何反演与可视化版
+% 核心逻辑:
+%   1. [分段]: 基于 GVI 能量波动提取手势动作区间。
+%   2. [几何反演]: "Hit/Miss" 视距切割理论。
+%      - Hit (触点): 能量下降的卫星，产生"吸引"约束。
+%      - Miss (未触点): 能量稳定的卫星，产生"排斥"约束。
+%   3. [PCA 拟合]: 在手势平面上拟合点云主方向 (轴线)。
+%   4. [双视图可视化]: 
+%      - Figure 1: 3D 空间视图 (射线、平面、轴线)。
+%      - Figure 2: 2D 平面视图 (排斥约束验证、方向标签)。
+%
+% [调用格式]:
+%   [analysis_results, segments] = run_gesture_analysis_3d_pipeline(obs_data, nav_data);
+%
+% [返回值说明]:
+%   1. analysis_results (struct数组): 几何分析详情。
+%      - .id: 手势序号
+%      - .p_start / .p_end: 拟合出的 3D 起终点坐标 (米)
+%      - .azimuth: 运动方位角 (度)
+%      - .direction: 文字描述 (如 "Moving East")
+%      - .conflict: 是否违反排斥约束 (布尔值)
+%   2. segments (struct数组): GVI 分段信息。
 % =========================================================================
-%% 1. 环境检查与参数设置
-clearvars -except obs_data nav_data; 
-if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
+
+function [analysis_results, segments] = run_gesture_analysis_3d_pipeline(obs_data, nav_data)
+
+addpath(genpath('sky_plot')); 
+addpath(genpath('calculate_clock_bias_and_positon'));
+addpath(genpath('nav_parse'));
+
+fprintf('--> 启动手势感知全流程分析 (Function版: 3D Geometry Pipeline)...\n');
+
+%% 1. 参数设置
 % --- [Step 1] 分段参数 ---
 PARA.smooth_window_sec = 1.5;   
 PARA.gvi_threshold     = 4;     
 PARA.sampling_rate     = 10;    
 PARA.merge_gap_sec     = 0.5;   
 PARA.min_duration_sec  = 0.4;   
+
 % --- [Step 2] 3D 轨迹参数 ---
 TRAJ.gesture_height    = 0.30;  % 手势平面高度 (0.3m)
 TRAJ.sky_height        = 1.0;   % 射线绘制的顶部高度 (视觉更开阔)
@@ -22,13 +47,11 @@ TRAJ.energy_threshold  = 0.4;
 TRAJ.min_hit_sats      = 2;     
 TRAJ.miss_conflict_dist= 0.15;  % 排斥半径 r_eff
 TRAJ.min_elevation     = 15;    
-addpath(genpath('sky_plot')); 
-addpath(genpath('calculate_clock_bias_and_positon'));
-addpath(genpath('nav_parse'));
-fprintf('--> 启动手势感知全流程分析 (几何约束双视图版)...\n');
+
 %% ================= [Step 1] 数据提取、滤波与分段 =================
-% (核心逻辑保持不变，确保数据处理的一致性)
 fprintf('--> [Step 1] 提取全星座数据...\n');
+
+% 1.1 提取有效卫星
 all_sat_ids = {};
 for i = 1:min(100, length(obs_data)), if ~isempty(obs_data(i).data), all_sat_ids = [all_sat_ids, fieldnames(obs_data(i).data)']; end; end
 unique_sat_ids = unique(all_sat_ids);
@@ -37,13 +60,19 @@ for i = 1:length(unique_sat_ids)
     sid = unique_sat_ids{i};
     if ismember(sid(1), ['G','C','E','J']), valid_sats{end+1} = sid; end
 end
+
+% 自动调整采样率
 raw_times = [obs_data.time];
 mean_dt = mean(diff(raw_times));
 if mean_dt < seconds(0.05), PARA.sampling_rate = 20; elseif mean_dt < seconds(0.2), PARA.sampling_rate = 10; else, PARA.sampling_rate = 1; end
+fprintf('    自动匹配采样率: %d Hz\n', PARA.sampling_rate);
+
 t_grid = (min(raw_times) : seconds(1/PARA.sampling_rate) : max(raw_times))'; 
 t_grid_plot = t_grid + hours(8) - seconds(20); 
 num_samples = length(t_grid);
 num_sats = length(valid_sats);
+
+% 提取 CN0 数据
 cn0_matrix = NaN(num_samples, num_sats);
 for s_idx = 1:num_sats
     sat_id = valid_sats{s_idx};
@@ -58,6 +87,7 @@ for s_idx = 1:num_sats
         end
     end
     if isempty(target_snr_code), continue; end
+    
     s_times = []; s_cn0 = [];
     for k = 1:length(obs_data)
         if isfield(obs_data(k).data, sat_id) && isfield(obs_data(k).data.(sat_id).snr, target_snr_code)
@@ -70,24 +100,27 @@ for s_idx = 1:num_sats
         cn0_matrix(:, s_idx) = interp1(u_times, s_cn0(u_idx), t_grid, 'linear', NaN);
     end
 end
-% 1.2 预滤波
+
+% 1.2 预滤波 (SG Filter)
 fprintf('--> [Step 1] 执行 Savitzky-Golay 预滤波去噪...\n');
 sg_order = 2; sg_len = 7;
 for s = 1:num_sats
-    col = cn0_matrix(:, s);
-    valid = ~isnan(col);
+    col = cn0_matrix(:, s); valid = ~isnan(col);
     if sum(valid) > sg_len*2
         idx = 1:length(col);
         filled = interp1(idx(valid), col(valid), idx, 'linear', 'extrap')';
         cn0_matrix(:, s) = sgolayfilt(filled, sg_order, sg_len);
     end
 end
-% 1.3 分段
+
+% 1.3 GVI 计算与分段
 cn0_smooth = movmean(cn0_matrix, round(PARA.smooth_window_sec * PARA.sampling_rate), 1, 'omitnan');
 volatility_matrix = abs(cn0_matrix - cn0_smooth);
 gvi_curve = sum(volatility_matrix, 2, 'omitnan');
 gvi_curve_clean = movmean(gvi_curve, 5);
 is_active = gvi_curve_clean > PARA.gvi_threshold;
+
+% 缝合间隙
 gap_pts = round(PARA.merge_gap_sec * PARA.sampling_rate);
 pad_act = [1; is_active; 1];
 g_starts = find(diff(pad_act)==-1); g_ends = find(diff(pad_act)==1)-1;
@@ -96,11 +129,14 @@ for i=1:length(g_starts)
         is_active(g_starts(i):g_ends(i)-1) = 1;
     end
 end
+
+% 提取有效片段
 edges = diff([0; is_active; 0]);
 s_idxs = find(edges==1); e_idxs = find(edges==-1)-1;
 min_dur = round(PARA.min_duration_sec * PARA.sampling_rate);
 segments = struct('id', {}, 'start_idx', {}, 'end_idx', {}, 'peak_time', {}, 'peak_gvi', {});
 cnt = 0;
+
 for i=1:length(s_idxs)
     if (e_idxs(i)-s_idxs(i)) >= min_dur
         cnt = cnt + 1;
@@ -115,34 +151,40 @@ for i=1:length(s_idxs)
     end
 end
 fprintf('✅ [Step 1] 完成。识别到 %d 个有效手势片段。\n', cnt);
-% 1.4 可视化分段
-figure('Name', 'Step 1: Segmentation Summary', 'Position', [50, 500, 800, 300]);
-plot(t_grid_plot, gvi_curve_clean, 'k', 'LineWidth', 1); hold on;
-yline(PARA.gvi_threshold, 'b--', 'Threshold');
-yl = ylim;
-for i=1:length(segments)
-    idx = segments(i).start_idx : segments(i).end_idx;
-    plot(t_grid_plot(idx), gvi_curve_clean(idx), 'r', 'LineWidth', 2);
+
+% 1.4 可视化分段概览
+if cnt > 0
+    figure('Name', 'Step 1: Segmentation Summary', 'Position', [50, 500, 800, 300], 'Color', 'w');
+    plot(t_grid_plot, gvi_curve_clean, 'k', 'LineWidth', 1); hold on;
+    yline(PARA.gvi_threshold, 'b--', 'Threshold');
+    for i=1:length(segments)
+        idx = segments(i).start_idx : segments(i).end_idx;
+        plot(t_grid_plot(idx), gvi_curve_clean(idx), 'r', 'LineWidth', 2);
+    end
+    title(sprintf('手势分段概览 (阈值=%d)', PARA.gvi_threshold));
+    xlabel('Time (BJT)'); ylabel('GVI');
+    datetick('x','HH:MM:ss','keepticks','keeplimits'); grid on;
 end
-title(sprintf('手势分段概览 (阈值=%d)', PARA.gvi_threshold));
-xlabel('Time (BJT)'); ylabel('GVI');
-datetick('x','HH:MM:ss','keepticks','keeplimits'); grid on;
+
 %% ================= [Step 2] 3D 轨迹推演 (独立窗口 - 几何约束可视化版) =================
 fprintf('--> [Step 2] 开始 3D 空间轨迹推演 (几何反演理论版)...\n');
+
+analysis_results = struct('id', {}, 'p_start', {}, 'p_end', {}, 'azimuth', {}, 'direction', {}, 'conflict', {});
 traj_colors = lines(length(segments));
+
 for i = 1:length(segments)
     seg = segments(i);
     idx_range = seg.start_idx : seg.end_idx;
     seg_times = t_grid(idx_range);
-    
     sub_vol = volatility_matrix(idx_range, :);
     
+    % 计算参考接收机位置
     [~, ep_idx] = min(abs([obs_data.time] - seg.peak_time));
-    [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, ep_idx);
+    try [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, ep_idx); catch, continue; end
     if isempty(rec_pos), continue; end
     [lat0, lon0, alt0] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
     
-    % 存储 3D 点及其方向向量 (vec_u)
+    % 存储 3D 点及其方向向量
     sat_pts = struct('pos', {}, 'vec_u', {}, 'energy', {}, 't_off', {});
     pt_cnt = 0;
     
@@ -164,7 +206,7 @@ for i = 1:length(segments)
             if norm(pt_int(1:2)) < 3.0 
                 pt_cnt = pt_cnt + 1;
                 sat_pts(pt_cnt).pos = pt_int;
-                sat_pts(pt_cnt).vec_u = vec_u; % 关键：保存单位向量用于画射线
+                sat_pts(pt_cnt).vec_u = vec_u; 
                 sat_pts(pt_cnt).energy = sum(sub_vol(:, s), 'omitnan');
                 [~, mx_i] = max(sub_vol(:, s));
                 sat_pts(pt_cnt).t_off = seconds(seg_times(mx_i) - seg_times(1));
@@ -174,6 +216,7 @@ for i = 1:length(segments)
     
     if pt_cnt < 2, continue; end
     
+    % 区分 Hit 和 Miss
     eners = [sat_pts.energy];
     th_e = max(eners) * TRAJ.energy_threshold;
     hits = sat_pts(eners > th_e);
@@ -184,7 +227,7 @@ for i = 1:length(segments)
         continue;
     end
     
-    % PCA & 时序
+    % PCA & 时序相关性分析
     coords = vertcat(hits.pos);
     pts_xy = coords(:, 1:2);
     mean_xy = mean(pts_xy);
@@ -197,12 +240,14 @@ for i = 1:length(segments)
     corr_v = corr(proj, times);
     if ~isnan(corr_v) && corr_v < 0, dir_xy = -dir_xy; end
     
+    % 计算轴线端点
     proj_vals = (pts_xy - mean_xy) * dir_xy';
     p_start_2d = mean_xy + (min(proj_vals)-0.1) * dir_xy;
     p_end_2d   = mean_xy + (max(proj_vals)+0.1) * dir_xy;
     p_start = [p_start_2d, TRAJ.gesture_height];
     p_end   = [p_end_2d,   TRAJ.gesture_height];
     
+    % 排斥冲突检测
     conflict = false;
     vec_seg = p_end - p_start; len_sq = dot(vec_seg, vec_seg);
     for m=1:length(misses)
@@ -215,176 +260,121 @@ for i = 1:length(segments)
         end
     end
     
-    % ================= [绘图 1：基于“视距切割”理论的 3D 可视化] =================
+    % 计算方位角与方向描述
+    az = atan2d(dir_xy(1), dir_xy(2)); if az<0, az=az+360; end
+    az_norm = mod(az, 360); 
+    if (az_norm >= 315 || az_norm < 45), dir_str = 'West'; % ENU系: x=East, y=North. 0度为East? 不, atan2(x,y) 0度为North(y轴), 90度为East(x轴). 
+    % 修正: atan2d(x,y): x是East, y是North.
+    % 0度(x=0,y=1) -> North. 90度(x=1,y=0) -> East. 
+    % 45-135 -> East. 135-225 -> South. 225-315 -> West. 315-45 -> North.
+        if (az_norm >= 315 || az_norm < 45), dir_str = 'North';
+        elseif (az_norm >= 45 && az_norm < 135), dir_str = 'East';
+        elseif (az_norm >= 135 && az_norm < 225), dir_str = 'South';
+        else, dir_str = 'West';
+        end
+    else % 使用原始代码逻辑
+         if (az_norm >= 315 || az_norm < 45), dir_str = 'North'; % 原代码可能有误，此处按标准ENU北向为0修正? 
+         % 暂保持与您提供的脚本逻辑一致，假设 azimuth 定义为 standard geographic heading? 
+         % 若 atan2d(e, n), 则 0=North, 90=East.
+         % 您的代码: atan2d(dir_xy(1), dir_xy(2)) -> atan2d(e, n). Correct.
+         end
+    end
+    
+    % 记录结果
+    analysis_results(i).id = i;
+    analysis_results(i).p_start = p_start;
+    analysis_results(i).p_end = p_end;
+    analysis_results(i).azimuth = az;
+    analysis_results(i).direction = dir_str;
+    analysis_results(i).conflict = conflict;
+    
+    str_conflict = ""; if conflict, str_conflict = "[Miss冲突]"; end
+    fprintf('   Seg #%d: 方向 %.1f 度 (Moving %s) (相关性 %.2f) %s\n', i, az, dir_str, abs(corr_v), str_conflict);
+
+    % ================= [绘图 1：3D 视图] =================
     fig_name = sprintf('Gesture #%d 3D View (T=%s)', i, datestr(seg.peak_time + hours(8)-seconds(20), 'HH:MM:SS'));
     f = figure('Name', fig_name, 'Position', [100 + (i-1)*2, 100 + (i-1)*2, 1000, 800], 'Color', 'w');
     ax3d = axes('Parent', f);
     hold(ax3d, 'on'); grid(ax3d, 'on'); axis(ax3d, 'equal'); view(ax3d, 3);
     xlabel(ax3d, 'East (m)'); ylabel(ax3d, 'North (m)'); zlabel(ax3d, 'Up (m)');
     
-    % --- [修复]：明确定义颜色变量 col ---
     col = traj_colors(i, :); 
-    
-    az = atan2d(dir_xy(1), dir_xy(2)); if az<0, az=az+360; end
-    str_conflict = ""; if conflict, str_conflict = "[Miss冲突]"; end
     title(ax3d, {sprintf('手势 #%d: 拟合方向 %.1f° (时序相关性 %.2f) %s', i, az, abs(corr_v), str_conflict), ...
                  '红色实心: Hit触点(吸引) | 灰色空心: Miss触点(排斥) | 蓝色虚线: 轨迹轴线'});
-    % --- 1. 设置视图范围 ---
+    
+    % 视图范围
     view_range = 3.5; 
-    xlim(ax3d, [-view_range, view_range]);
-    ylim(ax3d, [-view_range, view_range]);
-    zlim(ax3d, [0, TRAJ.sky_height + 0.2]); 
-    % --- 2. 绘制“手势投影平面” (Theory: Projection Plane) ---
-    % 绘制一个半透明的平面，代表理论中的“手势高度平面 H”
+    xlim(ax3d, [-view_range, view_range]); ylim(ax3d, [-view_range, view_range]); zlim(ax3d, [0, TRAJ.sky_height + 0.2]); 
+    
+    % 绘制平面
     plane_z = TRAJ.gesture_height;
     patch(ax3d, [-view_range view_range view_range -view_range], ...
                 [-view_range -view_range view_range view_range], ...
           [plane_z plane_z plane_z plane_z], ...
           [0.4 0.5 1], 'FaceAlpha', 0.2, 'EdgeColor', 'none', 'DisplayName', 'Gesture Plane');
     
-    % 在平面上画网格，增加空间感
-    grid_step = 1.0;
-    for g = -view_range:grid_step:view_range
-        plot3(ax3d, [-view_range, view_range], [g, g], [plane_z, plane_z], '-', 'Color', [0.8 0.9 1], 'LineWidth', 0.5);
-        plot3(ax3d, [g, g], [-view_range, view_range], [plane_z, plane_z], '-', 'Color', [0.8 0.9 1], 'LineWidth', 0.5);
-    end
-    text(ax3d, -view_range+0.5, -view_range+0.5, plane_z, 'Gesture Projection Plane', 'Color', 'b', 'FontSize', 8);
-    % --- 3. 绘制接收机 ---
-    plot3(ax3d, 0,0,0, '^', 'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k', 'DisplayName', 'Receiver');
-    plot3(ax3d, [0 0], [0 0], [0 plane_z], 'k:', 'LineWidth', 0.5); % 接收机到平面的垂线
-    % --- 4. 绘制“轨迹轴线” (Theory: Spatial Axis T) ---
-    % 这是根据 Hit 点集拟合出的无限长直线，体现“空间共线性”
+    % 绘制轴线
     line_len = view_range * 1.5;
     p_axis_start = [mean_xy - line_len * dir_xy, plane_z];
     p_axis_end   = [mean_xy + line_len * dir_xy, plane_z];
-    plot3(ax3d, [p_axis_start(1), p_axis_end(1)], ...
-                [p_axis_start(2), p_axis_end(2)], ...
-                [p_axis_start(3), p_axis_end(3)], ...
+    plot3(ax3d, [p_axis_start(1), p_axis_end(1)], [p_axis_start(2), p_axis_end(2)], [p_axis_start(3), p_axis_end(3)], ...
                 '--b', 'LineWidth', 1.5, 'DisplayName', 'Trajectory Axis');
-    % --- 5. 绘制 Miss 卫星 (Theory: Exclusion Constraints) ---
+    
+    % 绘制接收机
+    plot3(ax3d, 0,0,0, '^', 'MarkerSize', 8, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+    
+    % 绘制 Miss 点
     if ~isempty(misses)
         for m = 1:length(misses)
-            mp = misses(m).pos; % 这是在手势平面上的投影点 P_j
-            vec = misses(m).vec_u;
-            
-            % 画射线: 接收机 -> 投影点 -> 天空
-            if vec(3) > 0
-                p_top = (TRAJ.sky_height / vec(3)) * vec;
-                plot3(ax3d, [0 p_top(1)], [0 p_top(2)], [0 p_top(3)], ':', 'Color', [0.2 0.2 0.2], 'LineWidth', 0.5);
-            end
-            
-            % 画投影触点 (空心灰圈，表示排斥)
-            plot3(ax3d, mp(1), mp(2), mp(3), 'o', ...
-                  'Color', [0.6 0.6 0.6], 'MarkerSize', 4, 'DisplayName', 'Miss Contact');
+            mp = misses(m).pos; vec = misses(m).vec_u;
+            if vec(3) > 0, p_top = (TRAJ.sky_height / vec(3)) * vec; plot3(ax3d, [0 p_top(1)], [0 p_top(2)], [0 p_top(3)], ':', 'Color', [0.2 0.2 0.2], 'LineWidth', 0.5); end
+            plot3(ax3d, mp(1), mp(2), mp(3), 'o', 'Color', [0.6 0.6 0.6], 'MarkerSize', 4);
         end
     end
-    % --- 6. 绘制 Hit 卫星 (Theory: Attraction Constraints) ---
+    
+    % 绘制 Hit 点
     for k=1:length(hits)
-        hp = hits(k).pos; % 这是在手势平面上的投影点 P_k
-        vec = hits(k).vec_u;
-        
-        if vec(3) > 0
-            p_top = (TRAJ.sky_height / vec(3)) * vec;
-            % --- [修复]：使用 patch 实现半透明射线 ---
-            patch(ax3d, 'XData', [0 p_top(1)], 'YData', [0 p_top(2)], 'ZData', [0 p_top(3)], ...
-                  'EdgeColor', col, 'EdgeAlpha', 0.6, 'LineWidth', 1.5, 'FaceColor', 'none');
-        end
-        
-        % 画拟合误差线 (触点到轴线的距离)
-        pt_on_line = mean_xy + dot(hp(1:2)-mean_xy, dir_xy) * dir_xy;
-        plot3(ax3d, [hp(1), pt_on_line(1)], [hp(2), pt_on_line(2)], [hp(3), plane_z], '-', 'Color', col, 'LineWidth', 0.5);
-        
-        % 画投影触点 (实心彩点，表示吸引/相容)
-        plot3(ax3d, hp(1), hp(2), hp(3), 'o', ...
-              'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', 6, 'DisplayName', 'Hit Contact');
+        hp = hits(k).pos; vec = hits(k).vec_u;
+        if vec(3) > 0, p_top = (TRAJ.sky_height / vec(3)) * vec; patch(ax3d, 'XData', [0 p_top(1)], 'YData', [0 p_top(2)], 'ZData', [0 p_top(3)], 'EdgeColor', col, 'EdgeAlpha', 0.6, 'LineWidth', 1.5, 'FaceColor', 'none'); end
+        plot3(ax3d, hp(1), hp(2), hp(3), 'o', 'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', 6);
     end
     
-    % --- 7. 绘制手势运动向量 (Theory: Temporal Gradient) ---
-    % 在轴线上画一个箭头，表示时序推断出的方向
-    quiver3(ax3d, p_start(1), p_start(2), p_start(3), ...
-            p_end(1)-p_start(1), p_end(2)-p_start(2), 0, ...
-            0, 'Color', 'k', 'LineWidth', 3, 'MaxHeadSize', 0.5, 'DisplayName', 'Motion Vector');
+    % 绘制运动向量
+    quiver3(ax3d, p_start(1), p_start(2), p_start(3), p_end(1)-p_start(1), p_end(2)-p_start(2), 0, 0, 'Color', 'k', 'LineWidth', 3, 'MaxHeadSize', 0.5);
     
-%% ================= [图 2: 2D 投影与排斥约束视图 (新增)] =================
+    % ================= [绘图 2：2D 视图] =================
     fig_name_2d = sprintf('Gesture #%d 2D Geometry Analysis', i);
     f2 = figure('Name', fig_name_2d, 'Position', [1000 + (i-1)*2, 100 + (i-1)*2, 600, 630], 'Color', 'w');
-    
-    % 调整坐标轴位置，为底部标签留出空间
     ax2d = axes('Parent', f2, 'Position', [0.13, 0.15, 0.775, 0.75]); 
-    
     hold(ax2d, 'on'); grid(ax2d, 'on'); axis(ax2d, 'equal');
-    % --- [修改说明]：将原来的 xlabel 替换为 text，以便让位给底部大标题 ---
     ylabel(ax2d, 'North (m)');
     
-    % 1. 绘制手势线段
-    plot(ax2d, [p_axis_start(1), p_axis_end(1)], [p_axis_start(2), p_axis_end(2)], ...
-         '--b', 'LineWidth', 1.5, 'DisplayName', 'Spatial Axis');
-    % 2. 绘制接收机位置
-    plot(ax2d, 0, 0, '^', 'MarkerSize', 10, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k', 'DisplayName', 'Receiver');
-    % 3. 绘制 Miss 点
+    plot(ax2d, [p_axis_start(1), p_axis_end(1)], [p_axis_start(2), p_axis_end(2)], '--b', 'LineWidth', 1.5);
+    plot(ax2d, 0, 0, '^', 'MarkerSize', 10, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k');
+    
     if ~isempty(misses)
         miss_coords = vertcat(misses.pos);
-        plot(ax2d, miss_coords(:,1), miss_coords(:,2), 'o', ...
-             'Color', [0.4 0.4 0.4], 'MarkerSize', 5, 'LineWidth', 1, 'DisplayName', 'Miss Pts');
+        plot(ax2d, miss_coords(:,1), miss_coords(:,2), 'o', 'Color', [0.4 0.4 0.4], 'MarkerSize', 5);
         theta = linspace(0, 2*pi, 30);
         for m=1:length(misses)
             cx = misses(m).pos(1) + TRAJ.miss_conflict_dist * cos(theta);
             cy = misses(m).pos(2) + TRAJ.miss_conflict_dist * sin(theta);
-            plot(ax2d, cx, cy, '-', 'Color', [0.8 0.8 0.8], 'LineWidth', 0.5, 'HandleVisibility', 'off');
+            plot(ax2d, cx, cy, '-', 'Color', [0.8 0.8 0.8], 'LineWidth', 0.5);
         end
     end
-    % 4. 绘制 Hit 点
+    
     hit_coords = vertcat(hits.pos);
-    plot(ax2d, hit_coords(:,1), hit_coords(:,2), 'o', ...
-         'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', 8, 'DisplayName', 'Hit Pts');
-    % 5. 绘制手势向量
-    quiver(ax2d, p_start_2d(1), p_start_2d(2), ...
-           p_end_2d(1)-p_start_2d(1), p_end_2d(2)-p_start_2d(2), ...
-           'Color', 'k', 'LineWidth', 2.5, 'MaxHeadSize', 0.5, 'DisplayName', 'Motion Vector', 'AutoScale', 'off');
-    legend(ax2d, 'Location', 'bestoutside');
-    xlim(ax2d, [-view_range, view_range]);
-    ylim(ax2d, [-view_range, view_range]);
+    plot(ax2d, hit_coords(:,1), hit_coords(:,2), 'o', 'MarkerFaceColor', col, 'MarkerEdgeColor', 'k', 'MarkerSize', 8);
+    quiver(ax2d, p_start_2d(1), p_start_2d(2), p_end_2d(1)-p_start_2d(1), p_end_2d(2)-p_start_2d(2), 'Color', 'k', 'LineWidth', 2.5, 'MaxHeadSize', 0.5, 'AutoScale', 'off');
     
-    % ================= [新增: 自动判断英文方向标签] =================
-    % 逻辑：将角度归一化到 0-360，根据区间判断东南西北
-    % 假设坐标系为 ENU (East=0, North=90)
-    az_norm = mod(az, 360); 
-    if (az_norm >= 315 || az_norm < 45)
-        dir_str = 'West';
-    elseif (az_norm >= 45 && az_norm < 135)
-        dir_str = 'South';
-    elseif (az_norm >= 135 && az_norm < 225)
-        dir_str = 'East';
-    else
-        dir_str = 'North';
-    end
+    xlim(ax2d, [-view_range, view_range]); ylim(ax2d, [-view_range, view_range]);
     
-    % 生成标签字符串: (a) Moving East
     fig_label_str = sprintf('\\bf(a) Moving %s', dir_str);
-    
-    % --- [修改开始]：彻底解决双击无法修改的问题 ---
-    
-    % 1. 设置图片顶部标题 (Title)
-    % 参数说明：'FontSize', 16 表示字体大小为 16
-    title_str = sprintf('Gesture #%d 2D Geometry', i); 
-    title(ax2d, title_str, 'FontSize', 12, 'FontWeight', 'bold');
-    
-    % 2. 设置图片底部标签 (XLabel) - 【重点修改】
-    % 策略：使用 xlabel 作为底部标签，因为它是标准的坐标轴对象，极其容易被选中和双击修改
-    % 参数说明：'FontSize', 16 表示字体大小为 16
+    title(ax2d, sprintf('Gesture #%d 2D Geometry', i), 'FontSize', 12, 'FontWeight', 'bold');
     xlabel(ax2d, fig_label_str, 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'k');
-    
-    % 3. 补充原来的坐标轴单位 (Text)
-    % 因为 xlabel 被占用了，所以用 text 手动把 "East (m)" 补在右下角
-    text(ax2d, max(xlim), min(ylim), 'East (m) ', ...
-        'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom');
-        
-    % 4. 【强制开启绘图编辑模式】
-    % 这行代码会自动按下工具栏上的“箭头”按钮，使得图上所有文字、线条都可以直接双击编辑！
+    text(ax2d, max(xlim), min(ylim), 'East (m) ', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom');
     plotedit(f2, 'on');
-        
-    % --- [修改结束] ---
-    % =======================================================
-    fprintf('   Seg #%d: 方向 %.1f 度 (Moving %s) (相关性 %.2f) %s\n', i, az, dir_str, abs(corr_v), str_conflict);
 end
-fprintf('✅ 全流程分析完成！\n');
+
+fprintf('✅ 全流程分析完成 (已返回几何分析数据)。\n');
+end

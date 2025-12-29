@@ -1,19 +1,48 @@
 % =========================================================================
-% test_snr_baseline_algorithm.m
-% 功能: 验证 "全局基准线 + 窗口趋势判定" 新算法
-% 核心逻辑:
-%   1. 自动计算采样率。
-%   2. 全局基准线: 取众数 (Mode) 作为环境底噪基准。
-%   3. 毛刺剔除: 短时跳变强制归位。
-%   4. 趋势判定: 窗口内若出现跨越基准线的震荡，强制归位；单边趋势保留。
+% test_snr_baseline_algorithm.m (函数版)
+% 功能: 基准线趋势算法验证 (Algorithm Validation)
+% 描述:
+%   这是一个调试与验证工具，用于测试 "全局基准线 + 窗口趋势判定" 预处理算法
+%   的有效性。它不进行手势定位，而是专注于展示 SNR 信号是如何被清洗的。
+%   通过对比原始信号和处理后信号，您可以直观地调整噪声阈值和趋势窗口参数。
+%
+% [调用格式]:
+%   [cn0_flat, valid_sats, t_grid] = test_snr_baseline_algorithm(obs_data, nav_data);
+%
+% [输入参数]:
+%   1. obs_data (struct数组): 
+%      原始观测数据。
+%   2. nav_data (struct结构体): 
+%      (可选) 导航星历数据。本函数主要处理 SNR，不涉及定位，
+%      保留此参数是为了与其他分析函数接口保持一致。
+%
+% [返回值说明]:
+%   1. cn0_flat (double矩阵 [Samples x Sats]): 
+%      [处理后] 的信噪比矩阵。
+%      - 每一列对应一颗卫星。
+%      - 震荡已被归零到基准线，仅保留了显著的单边趋势 (手势动作)。
+%   2. valid_sats (cell数组): 
+%      卫星 ID 列表 (如 {'G01', 'C02', ...})，与矩阵的列一一对应。
+%   3. t_grid (datetime列向量): 
+%      插值对齐后的统一时间轴。
+%
+% [核心算法]:
+%   1. Global Baseline: 利用众数 (Mode) 锁定环境底噪基准线。
+%   2. Spike Rejection: 剔除短时 (<=5点) 的瞬时跳变毛刺。
+%   3. Trend Window Check: 
+%      - 若窗口内波动方向一致 (全正或全负) -> 判定为趋势，保留原始值。
+%      - 若窗口内波动方向混合 (震荡) -> 判定为噪声，强制压平至基准线。
 % =========================================================================
 
-%% 1. 环境检查与参数设置
-clearvars -except obs_data nav_data;
-if ~exist('obs_data', 'var'), error('请先加载 obs_data!'); end
+function [cn0_flat, valid_sats, t_grid] = test_snr_baseline_algorithm(obs_data, nav_data)
 
-fprintf('--> 启动基准线趋势算法验证 (Baseline Trend Algorithm)...\n');
+addpath(genpath('sky_plot')); 
+addpath(genpath('calculate_clock_bias_and_positon'));
+addpath(genpath('nav_parse'));
 
+fprintf('--> 启动基准线趋势算法验证 (Function版: Baseline Trend Algorithm)...\n');
+
+%% 1. 参数设置
 % --- [核心参数 - 请根据实际调整] ---
 PARA.diff_lag_N         = 5;     % 趋势窗口 (N点): 用于判断窗口内的单调性/震荡
 PARA.noise_cutoff_db    = 1;     % 噪声阈值 (dB): 与基准线偏差 <= 此值，视为平稳/噪声
@@ -88,8 +117,7 @@ for s = 1:num_sats
     % 取整后计算众数，确保基准线是一个整数水位
     baseline = mode(round(valid_data)); 
     
-    % 初始化输出列 (先默认全部设为基准线，然后把真正的动作"填"回去？或者反过来)
-    % 策略：初始化为原始值，然后把不符合趋势的压平到基准线
+    % 初始化输出列
     col = raw_col;
     
     % [Step 2] 逐点遍历与处理
@@ -151,7 +179,7 @@ for s = 1:num_sats
     cn0_flat(:, s) = col;
 end
 
-fprintf('✅ 计算完成。\n');
+fprintf('✅ 计算完成 (已返回处理后的 SNR 矩阵)。\n');
 
 %% 4. 绘图 (默认配色)
 fprintf('--> [绘图] 生成对比图...\n');
@@ -187,4 +215,5 @@ for s = 1:num_sats
 
     if plot_cnt >= 50, fprintf('⚠️ 已显示前 10 颗卫星...\n'); break; end
 end
-fprintf('✅ 完毕。\n');
+fprintf('✅ 绘图完毕。\n');
+end

@@ -67,11 +67,11 @@ TRAJ.min_action_dist   = 0.05;   % [触发] 动作死区 (米)
 PARA.min_sat_vol       = 1.0;    % [过滤] 单星波动门限 (dB)
 
 % 3. 时域聚类参数
-TRAJ.time_cluster_k    = 5;      % [聚类] 时间窗口: 每 5 个原始采样点合并为一个轨迹点
+TRAJ.time_cluster_k    = 3;      % [聚类] 时间窗口: 每 5 个原始采样点合并为一个轨迹点
 TRAJ.traj_smooth_m     = 1;      % [平滑] 最终轨迹的平滑窗口大小
 
 % 4. 仰角加权策略 (Strategy: Zenith Focus)
-TRAJ.elevation_power   = 2;      % [加权] 仰角权重指数。越高越只信头顶信号。
+TRAJ.elevation_power   = 1;      % [加权] 仰角权重指数。越高越只信头顶信号。
 
 %% ================= [Part 2] 核心计算流程 =================
 

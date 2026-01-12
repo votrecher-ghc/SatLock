@@ -27,13 +27,13 @@ addpath(genpath('sky_plot'));
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('nav_parse'));
 
-fprintf('--> 启动感知范围可视化 (Function版 v3.1)...\n');
+fprintf('--> 启动感知范围可视化 (Function版 v3.2: All Satellites)...\n');
 
 %% 1. 参数设置
 % --- 投影与感知参数 ---
-TRAJ.gesture_height    = 0.4;   % [物理] 手势平面高度 (米)
-TRAJ.min_elevation     = 25;    % [物理] 最低仰角过滤 (度)
-TRAJ.sensing_radius    = 0.1;   % [物理] 个体感知半径 (米)
+TRAJ.gesture_height    = 0.3;   % [物理] 手势平面高度 (米)
+TRAJ.min_elevation     = 0;     % [物理] 最低仰角过滤 (度)
+TRAJ.sensing_radius    = 0.5;   % [物理] 个体感知半径 (米)
 
 %% 2. 寻找最佳观测时刻 (快照)
 fprintf('--> [计算] 扫描卫星数量最多的最佳时刻...\n');
@@ -44,23 +44,36 @@ max_sat_count = -1;
 
 % 提取有效卫星列表
 all_sat_ids = {}; 
-for i=1:min(100,length(obs_data)), if~isempty(obs_data(i).data), all_sat_ids=[all_sat_ids,fieldnames(obs_data(i).data)']; end; end
+for i=1:min(100,length(obs_data))
+    if ~isempty(obs_data(i).data)
+        all_sat_ids = [all_sat_ids, fieldnames(obs_data(i).data)']; 
+    end
+end
 unique_sat_ids = unique(all_sat_ids); 
-valid_sats_list = {};
-for i=1:length(unique_sat_ids), sid=unique_sat_ids{i}; if ismember(sid(1),['G','C','E','J']), valid_sats_list{end+1}=sid; end; end
+
+% 【关键修改】不再进行 G/C/E/J 过滤，直接使用所有扫描到的卫星
+valid_sats_list = unique_sat_ids; 
 
 % 遍历寻找最佳时刻
 for t_idx = 1:num_epochs 
-    try [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, t_idx); catch, continue; end
+    try 
+        [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, t_idx); 
+    catch
+        continue; 
+    end
+    
     if isempty(rec_pos) || all(isnan(rec_pos)), continue; end
     [lat0, lon0, alt0] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
     
     current_count = 0;
     for s = 1:length(valid_sats_list)
-        sid = valid_sats_list{s}; if ~isfield(sat_states, sid), continue; end
+        sid = valid_sats_list{s}; 
+        if ~isfield(sat_states, sid), continue; end
+        
         sat_p = sat_states.(sid).position;
         [e, n, u] = ecef2enu(sat_p(1)-rec_pos(1), sat_p(2)-rec_pos(2), sat_p(3)-rec_pos(3), lat0, lon0, alt0);
-        vec_u = [e, n, u]/norm([e, n, u]); zen_deg = acosd(vec_u(3));
+        vec_u = [e, n, u]/norm([e, n, u]); 
+        zen_deg = acosd(vec_u(3));
         
         if vec_u(3)>0 && (90-zen_deg)>=TRAJ.min_elevation
             current_count = current_count + 1; 
@@ -76,6 +89,7 @@ end
 if best_epoch_idx == -1
     error('未找到有效时刻，无法进行可视化。');
 end
+
 fprintf('✅ 锁定最佳时刻: %s (可见卫星: %d)\n', datestr(obs_data(best_epoch_idx).time), max_sat_count);
 
 %% 3. 计算个体范围和整合包络
@@ -93,15 +107,19 @@ circle_x_base = TRAJ.sensing_radius * cos(theta);
 circle_y_base = TRAJ.sensing_radius * sin(theta);
 
 for s = 1:length(valid_sats_list)
-    sid = valid_sats_list{s}; if ~isfield(sat_states, sid), continue; end
+    sid = valid_sats_list{s}; 
+    if ~isfield(sat_states, sid), continue; end
+    
     sat_p = sat_states.(sid).position;
     [e, n, u] = ecef2enu(sat_p(1)-rec_pos(1), sat_p(2)-rec_pos(2), sat_p(3)-rec_pos(3), lat0, lon0, alt0);
-    vec_u = [e, n, u]/norm([e, n, u]); zen_deg = acosd(vec_u(3));
+    vec_u = [e, n, u]/norm([e, n, u]); 
+    zen_deg = acosd(vec_u(3));
     
     if vec_u(3) <= 0 || (90-zen_deg) < TRAJ.min_elevation, continue; end
     
     t_int = TRAJ.gesture_height / vec_u(3);
     pt_int = t_int * vec_u;
+    
     if norm(pt_int(1:2)) > 5.0, continue; end 
     
     center_e = pt_int(1); center_n = pt_int(2);
@@ -124,7 +142,7 @@ end
 %% 4. 绘图 (Custom Aesthetics + Bottom Label)
 fprintf('--> [绘图] 生成最终可视化...\n');
 
-f = figure('Name', 'Sensing Range Analysis v3.1', 'Position', [400, 150, 750, 750], 'Color', 'w');
+f = figure('Name', 'Sensing Range Analysis v3.2', 'Position', [400, 150, 750, 750], 'Color', 'w');
 ax = axes('Parent', f); hold(ax, 'on'); grid(ax, 'on'); axis(ax, 'equal');
 xlabel('East (m)'); ylabel('North (m)');
 
@@ -150,6 +168,7 @@ if ~isempty(proj_centers)
              plot(ax, cx, cy, '--', 'Color', col_ind, 'LineWidth', 1, 'HandleVisibility', 'off');
         end
     end
+    
     % 2. 画卫星中心点 (橙色实心点，最后画以防遮挡)
     plot(ax, proj_centers(:,1), proj_centers(:,2), '.', 'Color', col_sat, 'MarkerSize', 18, 'DisplayName', 'Projected Satellites');
 end
@@ -164,7 +183,7 @@ end
 
 % 标题与图例优化
 title_str = {
-    '\bf\fontsize{12}Sensing Scope Analysis',
+    '\bf\fontsize{12}Sensing Scope Analysis (All Systems)',
     sprintf('\\rm\\fontsize{10}Height: %.2fm', TRAJ.gesture_height),
     sprintf('\\rm\\fontsize{10}Visible Satellites: %d | Total Area: %.2f m^2', size(proj_centers, 1), area_val)
 };

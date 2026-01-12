@@ -1,58 +1,46 @@
 % =========================================================================
 % gesture_analysis_baseline_gvi.m (函数版)
-% 功能: 手势分析 Step 1 - 基准线清洗、GVI特征提取与动作分段 (v7.2 Deviation Mode)
+% 功能: 手势分析 Step 1 - 基准线清洗、GVI特征提取与动作分段 (v7.4 GLONASS Support)
 % 描述:
 %   [重要更新] 更改了 Volatility (波动能量) 的计算方式。
-%   不再使用 "当前值 - 滑动平均" (容易丢失长手势中间部分)，
-%   改为 "当前值 - 全局基准线" (abs(Data - Baseline))。
-%   这确保了只要信号处于遮挡状态，能量就持续存在，不会归零。
+%   不再使用 "当前值 - 滑动平均"，改为 "当前值 - 全局基准线" (abs(Data - Baseline))。
+%
+%   [v7.4 Update]:
+%   1. [修复] 增加了对 'R' (GLONASS) 卫星的支持。之前的版本只包含了 G/C/E/J。
+%   2. 包含 Data Injection 模块：将清洗后的基准线数据回填至 obs_clean。
+%   3. 修复了 containers.Map 报错问题。
 %
 % [调用格式]:
 %   [obs_clean, step1_res] = gesture_analysis_baseline_gvi(obs_data);
 %
 % [输入参数]:
 %   1. obs_data (struct数组): 
-%      原始观测数据，由 parse_rinex_obs 读取，包含 time 和 data 字段。
-%
-% [返回值说明]:
-%   1. obs_clean (struct): 
-%      原始结构的副本 (保持结构体兼容性)。
-%   2. step1_res (struct): 
-%      核心结果包，包含:
-%      - .cn0_clean_matrix: [关键] 经过算法清洗后的绝对 SNR 矩阵。
-%      - .volatility_matrix: 波动能量矩阵 (基于绝对偏差计算)。
-%      - .segments: 动作分段信息。
-%      - .t_grid: 统一的时间轴 (datetime)。
-%      - .valid_sats: 有效卫星列表。
-%      - .PARA: 参数集 (含采样率)。
+%      原始观测数据。
 % =========================================================================
 
 function [obs_clean, step1_res] = gesture_analysis_baseline_gvi(obs_data)
 
-fprintf('--> [Step 1] 启动基准线清洗与GVI分段 (Deviation Mode v7.2)...\n');
+fprintf('--> [Step 1] 启动基准线清洗与GVI分段 (Deviation Mode v7.4 + GLONASS)...\n');
 
 %% 1. 初始化与参数设置
-obs_clean = obs_data; 
+obs_clean = obs_data; % 初始化副本
 
 % --- 核心参数 ---
-PARA.sampling_rate      = 25;    % [系统] 锁定 25Hz (dt=0.04s)
-
+PARA.sampling_rate      = 25;    % [系统] 锁定 25Hz
 % [Baseline] 清洗参数
-PARA.diff_lag_N         = 5;     % 趋势窗口 (N点)
-PARA.noise_cutoff_db    = 1.0;   % 噪声/平稳阈值 (dB)
-PARA.spike_th_db        = 1.0;   % 毛刺检测阈值 (dB)
+PARA.diff_lag_N         = 5;     % 趋势窗口
+PARA.noise_cutoff_db    = 1.0;   % 噪声阈值
+PARA.spike_th_db        = 1.0;   % 毛刺阈值
 PARA.spike_max_duration = 5;     % 毛刺最大持续点数
-
 % [GVI & Segment] 参数
-% --- 事件检测参数配置 ---
-PARA.smooth_window_pts  = 25;    % [平滑窗口] 滑动平均滤波的窗口点数 (注: 在偏差模式下仅用于GVI曲线平滑以辅助检测，原始数据特征提取不受此影响)
-PARA.gvi_threshold      = 2;     % [激活阈值] GVI信号判定为"动作"的触发门限值 (超过此值视为潜在动作区域)
-PARA.merge_gap_pts      = 10;    % [合并容差] 两个动作片段间的最大允许间隔点数 (若间隔小于此值，则将两段合并视为同一动作，防止动作破碎)
-PARA.min_duration_pts   = 3;     % [最小力度] 有效动作的最小持续点数 (持续时间短于此值的脉冲将被视为噪声过滤掉)
+PARA.smooth_window_pts  = 25;    % [平滑窗口]
+PARA.gvi_threshold      = 2;     % [激活阈值]
+PARA.merge_gap_pts      = 10;    % [合并容差]
+PARA.min_duration_pts   = 3;     % [最小力度]
 
 fprintf('    算法模式: 绝对偏差 (Abs Deviation from Baseline)\n');
 
-%% 2. 数据对齐 (插值)
+%% 2. 数据对齐 (插值) & 矩阵构建
 % 2.1 提取卫星
 all_sat_ids = {};
 scan_range = unique([1:min(100, length(obs_data)), max(1, length(obs_data)-100):length(obs_data)]);
@@ -63,7 +51,10 @@ unique_sat_ids = unique(all_sat_ids);
 valid_sats = {};
 for i = 1:length(unique_sat_ids)
     sid = unique_sat_ids{i};
-    if ismember(sid(1), ['G','C','E','J']), valid_sats{end+1} = sid; end
+    % [修复] 在此处添加了 'R' 以支持 GLONASS
+    if ismember(sid(1), ['G','R','C','E','J']) 
+        valid_sats{end+1} = sid; 
+    end
 end
 
 % 2.2 构建网格
@@ -72,11 +63,13 @@ t_grid  = (min(raw_times) : seconds(1/PARA.sampling_rate) : max(raw_times))';
 num_samples = length(t_grid);
 num_sats = length(valid_sats);
 
-% 2.3 插值原始 SNR
+% 2.3 插值原始 SNR (构建 cn0_matrix)
 cn0_matrix = NaN(num_samples, num_sats);
+
 for s_idx = 1:num_sats
     sid = valid_sats{s_idx};
     target_code = '';
+    % 寻找该卫星可用的 SNR 信号码
     for k = 1:min(50, length(obs_data)) 
         if isfield(obs_data(k).data, sid) && isfield(obs_data(k).data.(sid), 'snr')
             fds = fieldnames(obs_data(k).data.(sid).snr);
@@ -85,6 +78,7 @@ for s_idx = 1:num_sats
     end
     if isempty(target_code), continue; end
     
+    % 提取离散数据
     s_times = []; s_vals = [];
     for k = 1:length(obs_data)
         if isfield(obs_data(k).data, sid) && isfield(obs_data(k).data.(sid).snr, target_code)
@@ -94,21 +88,21 @@ for s_idx = 1:num_sats
             end
         end
     end
+    
+    % 执行线性插值
     if length(s_times) > 5
         [u_times, u_idx] = unique(s_times);
         cn0_matrix(:, s_idx) = interp1(u_times, s_vals(u_idx), t_grid, 'linear', NaN);
     end
 end
 
-%% 3. 基准线清洗 (验证算法逻辑)
+%% 3. 基准线清洗 (清洗算法逻辑)
 fprintf('--> [预处理] 执行基准线清洗...\n');
-
 N = PARA.diff_lag_N;
 NoiseTh = PARA.noise_cutoff_db;
 SpikeTh = PARA.spike_th_db;
 SpikeDur = PARA.spike_max_duration;
 
-% 记录每颗卫星的 Baseline 值
 sat_baselines = NaN(1, num_sats);
 
 for s = 1:num_sats
@@ -116,7 +110,7 @@ for s = 1:num_sats
     valid_mask = ~isnan(raw_col);
     if sum(valid_mask) < 10, continue; end
     
-    % 计算全局基准线
+    % 计算全局基准线 (众数)
     base_val = mode(round(raw_col(valid_mask))); 
     sat_baselines(s) = base_val; 
     
@@ -154,35 +148,27 @@ for s = 1:num_sats
             end
         end
     end
-    cn0_matrix(:, s) = col; % 更新为清洗后的数据
+    cn0_matrix(:, s) = col; 
 end
 
-%% 4. [核心修改] GVI 计算 (基于绝对偏差)
-% 算法: volatility = abs(current - global_baseline)
+%% 4. GVI 计算 (基于绝对偏差)
 fprintf('--> [特征提取] 计算绝对偏差能量 (Deviation Energy)...\n');
-
 volatility_matrix = zeros(size(cn0_matrix));
-
 for s = 1:num_sats
     if isnan(sat_baselines(s)), continue; end
     
-    % 取出清洗后的数据
     clean_col = cn0_matrix(:, s);
     base_val  = sat_baselines(s);
     
-    % 计算偏差能量
     dev_col = abs(clean_col - base_val);
-    
-    % 双重保险: 再次过滤微小噪声
     dev_col(dev_col <= PARA.noise_cutoff_db) = 0;
     
     volatility_matrix(:, s) = dev_col;
 end
 
-% 计算 GVI 总和
+% GVI Sum & Segmentation
 gvi_curve = sum(volatility_matrix, 2, 'omitnan');
-% 平滑 GVI 曲线
-gvi_curve_clean = movmean(gvi_curve, 5); 
+gvi_curve_clean = movmean(gvi_curve, 5);
 is_active = gvi_curve_clean > PARA.gvi_threshold;
 
 % Merge Gap
@@ -194,7 +180,7 @@ for i = 1:length(gap_starts)
     end
 end
 
-% Segments
+% Extract Segments
 edges = diff([0; is_active; 0]);
 s_indices = find(edges == 1); e_indices = find(edges == -1) - 1;
 segments = struct('id', {}, 'start_idx', {}, 'end_idx', {}, 'peak_time', {}, 'peak_gvi', {}, 'peak_idx', {});
@@ -213,7 +199,34 @@ for i = 1:length(s_indices)
 end
 fprintf('✅ [Step 1] 完成: 识别到 %d 个片段。\n', num_segs);
 
-%% 5. 结果打包
+%% 5. [核心] 数据回填 (Data Injection)
+fprintf('--> [Injection] 正在将清洗后的基准线回填至 obs_clean...\n');
+
+sat_map = containers.Map(valid_sats, 1:num_sats);
+
+for k = 1:length(obs_clean)
+    t_now = obs_clean(k).time;
+    [~, t_idx] = min(abs(t_grid - t_now));
+    
+    epoch_sats = fieldnames(obs_clean(k).data);
+    for i = 1:length(epoch_sats)
+        sid = epoch_sats{i};
+        if isKey(sat_map, sid)
+            col_idx = sat_map(sid);
+            val_clean = cn0_matrix(t_idx, col_idx);
+            
+            snr_struct = obs_clean(k).data.(sid).snr;
+            fds = fieldnames(snr_struct);
+            if ~isempty(fds)
+                target_code = fds{1};
+                obs_clean(k).data.(sid).snr.(target_code) = val_clean;
+            end
+        end
+    end
+end
+fprintf('✅ obs_clean 数据回填完成 (包含 R 系列卫星)。\n');
+
+%% 6. 结果打包
 step1_res.segments = segments;
 step1_res.volatility_matrix = volatility_matrix; 
 step1_res.cn0_clean_matrix  = cn0_matrix;  

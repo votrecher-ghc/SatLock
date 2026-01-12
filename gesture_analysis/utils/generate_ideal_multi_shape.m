@@ -30,29 +30,21 @@
 %   2. 遮挡判定: 判断交点是否落在目标形状的线条 (Line Segment) 及其宽度范围内。
 %   3. 信号注入: 若判定为遮挡，将 SNR 减去设定的衰减值 (如 15dB)。
 % =========================================================================
-
 function obs_data = generate_ideal_multi_shape(obs_data, nav_data, TARGET_LETTER)
-
 % --- [Part 0] 环境与数据检查 ---
 % (已移除脚本专用的 clearvars)
-
 addpath(genpath('calculate_clock_bias_and_positon'));
 addpath(genpath('nav_parse'));
-
 fprintf('--> 启动仿真 V7 (Function版): 目标 [%s]...\n', TARGET_LETTER);
-
 %% ================= [Part 1] 仿真参数设置 =================
-
 % 1. 信号参数
 SIM.baseline_db    = 45;       % [基线] 平稳时的信号强度 (dB)
 SIM.drop_depth_db  = 15;       % [波动] 遮挡时的下降深度 (dB)
 SIM.noise_sigma    = 0.02;     % [噪声] 微小抖动
-
 % 2. 几何参数
 SIM.gesture_height = 0.20;     % 手势平面高度 (米)
 SIM.arm_width      = 0.12;     % [关键] 手臂有效遮挡宽度 (米)
 SIM.body_pos       = [0.0, -1.0]; % [关键] 身体位置 (接收机正南方1米)
-
 % 3. 形状定义 (Switch Case)
 switch TARGET_LETTER
     case 'A'
@@ -65,7 +57,6 @@ switch TARGET_LETTER
             P3, P4, 3.0, false;  % Interval
             P4, P5, 1.5, true    % -
         };
-
     case 'B'
         P1 = [-0.40, -1]; P2 = [-0.40,  1]; P3 = [ 1.5,  0.40]; 
         P4 = [-0.40,  0.00]; P5 = [ 1.5,  0.00]; P6 = [-0.40, -1]; 
@@ -76,7 +67,6 @@ switch TARGET_LETTER
             P4, P5, 1.5, true; P5, P5, 3.0, false;
             P5, P6, 1.5, true
         };
-
     case 'M'
         P1 = [-0.40, -0.40]; P2 = [-0.40,  0.40]; P3 = [ 0.00,  0.00];
         P4 = [ 0.40,  0.40]; P5 = [ 0.40, -0.40];
@@ -86,7 +76,6 @@ switch TARGET_LETTER
             P3, P4, 1.5, true;  P4, P4, 3.0, false;
             P4, P5, 1.5, true
         };
-
     case 'Star'
         P1 = [-0.30, -0.45]; P2 = [ 0.00,  0.55]; P3 = [ 0.30, -0.45];
         P4 = [-0.48,  0.15]; P5 = [ 0.48,  0.15];
@@ -97,7 +86,6 @@ switch TARGET_LETTER
             P4, P5, 1.5, true; P5, P5, 3.0, false;
             P5, P1, 1.5, true
         };
-
     case 'L'
         P_TL=[-0.3,0.4]; P_BL=[-0.3,-0.4]; P_BR=[0.3,-0.4];
         STAGES = {
@@ -105,7 +93,6 @@ switch TARGET_LETTER
             P_BL, P_BL, 3.0, false; % Interval
             P_BL, P_BR, 1.5, true   % _
         };
-
     case 'D'
         P1=[-0.3,0.5]; P2=[-0.3,-0.5]; P3=[0.0,0.5]; P4=[0.3,0.0]; P5=[0.0,-0.5];
         STAGES = {
@@ -116,7 +103,6 @@ switch TARGET_LETTER
             P4, P5, 1.0, true;   % )
             P5, P2, 1.0, true    % -
         };
-
     case 'X'
         P_TL=[-0.3,0.4]; P_TR=[0.3,0.4]; P_BL=[-0.3,-0.4]; P_BR=[0.3,-0.4];
         STAGES = {
@@ -124,7 +110,6 @@ switch TARGET_LETTER
             P_BR, P_TR, 3.0, false; % Interval
             P_TR, P_BL, 1.5, true   % /
         };
-
     case 'Z'
         P_TL=[-0.3,0.4]; P_TR=[0.3,0.4]; P_BL=[-0.3,-0.4]; P_BR=[0.7,-0.4];
         STAGES = {
@@ -134,7 +119,6 @@ switch TARGET_LETTER
             P_BL, P_BL, 3.0, false; % Interval
             P_BL, P_BR, 1.5, true   % _
         };
-
     case 'N'
         P_BL=[-0.3,-0.4]; P_TL=[-0.3,0.4]; P_BR=[0.3,-0.4]; P_TR=[0.3,0.4];
         STAGES = {
@@ -144,32 +128,26 @@ switch TARGET_LETTER
             P_BR, P_BR, 3.0, false; % Interval
             P_BR, P_TR, 1.5, true   % |
         };
-
     otherwise
         error('未定义的字母: %s', TARGET_LETTER);
 end
-
 % 计算总时长
 total_sim_duration = 0;
 for k=1:size(STAGES, 1), total_sim_duration = total_sim_duration + STAGES{k,3}; end
-
 %% ================= [Part 2] 数据准备 =================
 ideal_obs = obs_data;
 raw_times = [ideal_obs.time];
 num_samples = length(raw_times);
-
 start_idx = round(num_samples * 0.3); 
 sampling_rate = 25; 
 end_idx = start_idx + round(total_sim_duration * sampling_rate);
-
 if end_idx > num_samples
     error('原始数据太短，请更换更长的数据文件。');
 end
-
 % 提取有效卫星
 all_sat_ids = {}; for i=1:min(100, length(ideal_obs)), if ~isempty(ideal_obs(i).data), all_sat_ids = [all_sat_ids, fieldnames(ideal_obs(i).data)']; end; end
-unique_sat_ids = unique(all_sat_ids); valid_sats = {}; for i=1:length(unique_sat_ids), sid=unique_sat_ids{i}; if ismember(sid(1),['G','C','E','J']), valid_sats{end+1}=sid; end; end
-
+% [修改] 增加 'R' 以支持 GLONASS 系统，确保 G/C/R/E/J 均被包含
+unique_sat_ids = unique(all_sat_ids); valid_sats = {}; for i=1:length(unique_sat_ids), sid=unique_sat_ids{i}; if ismember(sid(1),['G','C','R','E','J']), valid_sats{end+1}=sid; end; end
 % 计算接收机参考位置
 fprintf('    计算接收机参考位置...\n');
 rec_pos_acc = [0,0,0]; count = 0;
@@ -179,18 +157,14 @@ end
 if count==0, error('无法计算接收机位置'); end
 rec_pos_mean = rec_pos_acc / count;
 [lat0, lon0, alt0] = ecef2geodetic(rec_pos_mean(1), rec_pos_mean(2), rec_pos_mean(3));
-
 %% ================= [Part 3] 核心循环: 信号注入与轨迹记录 =================
 fprintf('    正在注入信号并记录真值轨迹...\n');
-
 % --- 用于记录 Ground Truth 的数组 ---
 num_sim_pts = end_idx - start_idx + 1;
 gt_trace_x = NaN(num_sim_pts, 1);
 gt_trace_y = NaN(num_sim_pts, 1);
 gt_pen_down = false(num_sim_pts, 1);
-
 progr_step = floor(num_sim_pts/10);
-
 for t_idx = 1 : num_samples
     
     if mod(t_idx-start_idx, progr_step) == 0 && t_idx >= start_idx && t_idx <= end_idx
@@ -260,28 +234,23 @@ for t_idx = 1 : num_samples
     end
 end
 obs_data = ideal_obs; % 更新输出数据
-
 %% ================= [Part 4] Ground Truth 可视化 =================
 fprintf('--> 生成 Ground Truth 轨迹图...\n');
 figure('Name', sprintf('Ideal Ground Truth Trajectory [%s]', TARGET_LETTER), 'Position', [100, 100, 600, 600], 'Color', 'w');
 ax = axes; hold(ax, 'on'); grid(ax, 'on'); axis(ax, 'equal');
 xlabel('East (m)'); ylabel('North (m)');
-
 % 1. 画接收机位置和身体参考点
 plot(ax, 0, 0, '^', 'MarkerSize', 12, 'MarkerFaceColor', 'k', 'MarkerEdgeColor', 'k', 'DisplayName', 'Receiver');
 plot(ax, SIM.body_pos(1), SIM.body_pos(2), 'bs', 'MarkerSize', 10, 'MarkerFaceColor', 'b', 'DisplayName', 'Body/Shoulder Ref');
-
 % 2. 画轨迹 (区分落笔和抬手)
 plot_x_up = gt_trace_x; plot_y_up = gt_trace_y;
 plot_x_up(gt_pen_down) = NaN; plot_y_up(gt_pen_down) = NaN;
 plot_x_down = gt_trace_x; plot_y_down = gt_trace_y;
 plot_x_down(~gt_pen_down) = NaN; plot_y_down(~gt_pen_down) = NaN;
-
 % 绘制抬手移动 (灰色虚线)
 plot(ax, plot_x_up, plot_y_up, 'k--', 'LineWidth', 1, 'Color', [0.6 0.6 0.6], 'DisplayName', 'Pen Up (Interval Move)');
 % 绘制落笔书写 (蓝色实线 - 核心轨迹)
 plot(ax, plot_x_down, plot_y_down, 'b-', 'LineWidth', 3, 'DisplayName', 'Pen Down (Target Stroke)');
-
 % 3. 标记起点和终点
 first_idx = find(~isnan(gt_trace_x), 1, 'first');
 if ~isempty(first_idx)
@@ -291,10 +260,8 @@ last_idx = find(~isnan(gt_trace_x), 1, 'last');
  if ~isempty(last_idx)
      plot(ax, gt_trace_x(last_idx), gt_trace_y(last_idx), 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 10, 'DisplayName', 'End');
 end
-
 title({sprintf('Ideal Ground Truth Trajectory (Letter %s)', TARGET_LETTER), 'Blue: Signal Drop Regions, Gray: Intervals'});
 legend('Location', 'best');
-
 % 自动缩放视角
 valid_pts_x = gt_trace_x(~isnan(gt_trace_x));
 valid_pts_y = gt_trace_y(~isnan(gt_trace_y));
@@ -305,6 +272,5 @@ else
 end
 xlim([-max_range*1.2, max_range*1.2]);
 ylim([-max_range*1.2, max_range*1.2] + SIM.body_pos(2)/2); 
-
 fprintf('✅ 仿真与绘图全部完成 (已返回修改后的 obs_data)。\n');
 end

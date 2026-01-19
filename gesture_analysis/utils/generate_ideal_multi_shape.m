@@ -43,7 +43,7 @@ SIM.drop_depth_db  = 15;       % [波动] 遮挡时的下降深度 (dB)
 SIM.noise_sigma    = 0.02;     % [噪声] 微小抖动
 % 2. 几何参数
 SIM.gesture_height = 0.20;     % 手势平面高度 (米)
-SIM.arm_width      = 0.12;     % [关键] 手臂有效遮挡宽度 (米)
+SIM.arm_width      = 0.40;     % [关键] 手臂有效遮挡宽度 (米)
 SIM.body_pos       = [0.0, -1.0]; % [关键] 身体位置 (接收机正南方1米)
 % 3. 形状定义 (Switch Case)
 switch TARGET_LETTER

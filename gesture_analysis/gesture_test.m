@@ -3,8 +3,8 @@ clear;
 clc; 
 close all;
 %%
-obs_filepath = 'A_1_13_1.obs'; 
-nav_filepath = '2026_1_13.nav'; 
+obs_filepath = 'fingure_mix_12_20_3.obs'; 
+nav_filepath = 'arounds_12_20_1.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);
@@ -22,16 +22,19 @@ nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 % obs_replay = simulate_gnss_spoofing(obs_data, nav_data, 'REPLAY');
 
 %%
+% plot_sn(obs_data);
 
-%第二步的轨迹推演需要这一步的参数，将obs_clean单独拎出来方便进行下一步特征归一化，
-% obs_clean就是经过baseline处理过的os文件
-plot_sn(obs_data);
 [obs_clean, step1_res] = gesture_analysis_baseline_gvi(obs_data);
-% plot_sn(obs_clean);
-[obs_waveform, step1_res_shaped] = waveform_reshaping(obs_data, obs_clean, step1_res);
+plot_sn(obs_clean);
+
+% [obs_waveform, step1_res_shaped] = waveform_reshaping(obs_data, obs_clean, step1_res);
 % plot_sn(obs_waveform);
 
+[obs_waveform, step1_res_shaped] = waveform_drop_recovery_reshaping(obs_clean, step1_res);
+plot_sn(obs_waveform);
 %%
 
 run_gesture_analysis_continuous_track(obs_waveform, nav_data, step1_res_shaped);
 run_gesture_analysis_continuous_track_line(obs_waveform, nav_data, step1_res_shaped);
+
+run_gesture_analysis_boundary_trackV3(obs_waveform, nav_data, step1_res);

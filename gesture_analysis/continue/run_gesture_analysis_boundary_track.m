@@ -65,7 +65,7 @@ PARA.active_th         = 1.0;
 
 % 3. 对抗与边界参数
 ALG.zenith_safe_deg    = 30;    % [掩膜] 安全仰角门限 (度)
-ALG.top_k_percent      = 0.2;   % [核心] 前沿比例: 取对抗方向上最远的前 20%
+ALG.top_k_percent      = 0.1;   % [核心] 前沿比例: 取对抗方向上最远的前 20%
 
 % 4. 时域聚类与平滑
 TRAJ.time_cluster_k    = 5;     % [聚类] 时间窗口
@@ -133,7 +133,12 @@ for t_start = 1 : K_cluster : num_samples
             [e, n, u] = ecef2enu(sat_p(1)-rec_pos(1), sat_p(2)-rec_pos(2), sat_p(3)-rec_pos(3), lat0, lon0, alt0);
             dist = norm([e, n, u]);
             vec_u = [e, n, u] / dist; 
+            
+            % [修改开始] 修正仰角计算逻辑，将天顶角转换为仰角 (Elevation)
+            % zen_deg = acosd(vec_u(3));
             zen_deg = acosd(vec_u(3));
+            el_deg = 90 - zen_deg; % 计算仰角，用于后续保留头顶卫星
+            % [修改结束]
             
             if vec_u(3) <= 0, continue; end
             
@@ -149,12 +154,18 @@ for t_start = 1 : K_cluster : num_samples
             % 收集逻辑 (应用安全仰角过滤)
             if is_active_sat
                 % 波动组: 剔除过低仰角 (可能被身体挡住)
-                if zen_deg >= ALG.zenith_safe_deg
+                % [修改开始] 修正为仰角判断：保留仰角大于阈值(头顶)的卫星，剔除地平线附近卫星
+                % if zen_deg >= ALG.zenith_safe_deg
+                if el_deg >= ALG.zenith_safe_deg
+                % [修改结束]
                     active_points(end+1, :) = [pt_int(1), pt_int(2)];
                 end
             else
                 % 稳定组: 同样只参考有效工作区的卫星
-                if zen_deg >= ALG.zenith_safe_deg
+                % [修改开始] 修正为仰角判断
+                % if zen_deg >= ALG.zenith_safe_deg
+                if el_deg >= ALG.zenith_safe_deg
+                % [修改结束]
                     stable_points(end+1, :) = [pt_int(1), pt_int(2)];
                 end
             end

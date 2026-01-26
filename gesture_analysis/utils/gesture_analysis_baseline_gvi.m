@@ -34,7 +34,7 @@ PARA.spike_th_db        = 1.0;   % 毛刺阈值
 PARA.spike_max_duration = 5;     % 毛刺最大持续点数
 % [GVI & Segment] 参数
 PARA.smooth_window_pts  = 25;    % [平滑窗口]
-PARA.gvi_threshold      = 2;     % [激活阈值]
+PARA.gvi_threshold      = 20;     % [激活阈值]
 PARA.merge_gap_pts      = 10;    % [合并容差]
 PARA.min_duration_pts   = 3;     % [最小力度]
 
@@ -225,6 +225,62 @@ for k = 1:length(obs_clean)
     end
 end
 fprintf('✅ obs_clean 数据回填完成 (包含 R 系列卫星)。\n');
+
+%% 7. 结果可视化 (Visual Debug)
+% =========================================================================
+% 说明: 此模块用于绘制 GVI 曲线和阈值线，方便调试参数。
+%       如果你不需要绘图，可以将下方的 if true 改为 if false。
+% =========================================================================
+
+if  false
+    figure('Name', 'GVI Segmentation Analysis (Step 1)', 'Position', [100, 100, 1000, 600], 'Color', 'w');
+    
+    % 为了更符合直觉，将绘图时间转为北京时间 (UTC+8)
+    t_grid_plot = t_grid + hours(8);
+    
+    % --- 子图 1: GVI 曲线与阈值 ---
+    subplot(2, 1, 1);
+    plot(t_grid_plot, gvi_curve_clean, 'k-', 'LineWidth', 1); hold on;
+    yline(PARA.gvi_threshold, 'b--', 'Threshold', 'LineWidth', 1.5, 'LabelHorizontalAlignment', 'left');
+    
+    title(['1. GVI Energy Curve (Threshold = ' num2str(PARA.gvi_threshold) ')']);
+    ylabel('GVI Value');
+    grid on; axis tight;
+    if ~isempty(t_grid_plot), datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); end
+    
+    % --- 子图 2: 动作片段详情 (红色高亮) ---
+    subplot(2, 1, 2);
+    plot(t_grid_plot, gvi_curve_clean, 'Color', [0.8 0.8 0.8], 'LineWidth', 1); hold on;
+    yline(PARA.gvi_threshold, 'b--', 'LineWidth', 1);
+    
+    title(['2. Detected Segments (Total: ' num2str(num_segs) ')']);
+    ylabel('Segment Detail');
+    grid on; axis tight;
+    if ~isempty(t_grid_plot), datetick('x', 'HH:MM:ss', 'keepticks', 'keeplimits'); end
+    
+    % 绘制红色高亮区域
+    yl = ylim;
+    for i = 1:num_segs
+        idx_r = segments(i).start_idx : segments(i).end_idx;
+        if isempty(idx_r), continue; end
+        
+        t_s = t_grid_plot(segments(i).start_idx);
+        t_e = t_grid_plot(segments(i).end_idx);
+        
+        % 绘制半透明红色背景块
+        patch([t_s t_e t_e t_s], [yl(1) yl(1) yl(2) yl(2)], 'r', 'FaceAlpha', 0.1, 'EdgeColor', 'none');
+        
+        % 绘制该段的高亮曲线
+        plot(t_grid_plot(idx_r), gvi_curve_clean(idx_r), 'r-', 'LineWidth', 1.5);
+        
+        % 标记 ID
+        text(t_grid_plot(segments(i).peak_idx), segments(i).peak_gvi, sprintf('#%d', segments(i).id), ...
+             'Color', 'r', 'VerticalAlignment', 'bottom', 'FontWeight', 'bold');
+    end
+    
+    fprintf('✅ [Plot] GVI 可视化图表已生成。\n');
+end
+% =========================================================================
 
 %% 6. 结果打包
 step1_res.segments = segments;

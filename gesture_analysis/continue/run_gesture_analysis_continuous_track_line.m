@@ -71,7 +71,7 @@ TRAJ.time_cluster_k    = 3;      % [聚类] 时间窗口: 每 5 个原始采样�
 TRAJ.traj_smooth_m     = 1;      % [平滑] 最终轨迹的平滑窗口大小
 
 % 4. 仰角加权策略 (Strategy: Zenith Focus)
-TRAJ.elevation_power   = 4;      % [加权] 仰角权重指数。越高越只信头顶信号。
+TRAJ.elevation_power   = 2;      % [加权] 仰角权重指数。越高越只信头顶信号。
 
 %% ================= [Part 2] 核心计算流程 =================
 

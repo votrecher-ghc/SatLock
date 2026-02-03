@@ -3,15 +3,15 @@ clear;
 clc; 
 close all;
 %%
-obs_filepath = 'fingure_C_12_8_20_1.obs'; 
-nav_filepath = 'arounds_12_8_1.nav'; 
+obs_filepath = 'A_1_8_1.obs'; 
+nav_filepath = '2026_1_8.nav'; 
 % --- 2. 解析文件 ---
 fprintf('--> 正在解析观测文件: %s\n', obs_filepath);
 obs_data = parse_rinex_obs(obs_filepath);
 fprintf('--> 正在解析导航文件: %s\n', nav_filepath);
 nav_data = parse_rinex_nav_multi_gnss(nav_filepath);
 
-obs_data = generate_ideal_multi_shape(obs_data, nav_data, 'Star');
+obs_data = generate_ideal_multi_shape(obs_data, nav_data, 'A');
 
 
 % remove_set = {'J08','S28','C49','S29','S37','R14','R15','R17','R23','R24'}; 
@@ -37,10 +37,8 @@ calculate_and_plot_all_skyplot(obs_data, nav_data);
 
 
 %%
-
 run_gesture_analysis_continuous_track(obs_waveform, nav_data, step1_res_shaped);
 run_gesture_analysis_continuous_track_line(obs_aligned, nav_data, step1_aligned);
 run_gesture_analysis_boundary_trackV3(obs_waveform, nav_data, step1_res_shaped);
-
 %%
-% run_gesture_analysis_temporal_trajectory(obs_waveform, nav_data);
+run_gesture_analysis_physics_engine(obs_waveform, nav_data, step1_res_shaped);

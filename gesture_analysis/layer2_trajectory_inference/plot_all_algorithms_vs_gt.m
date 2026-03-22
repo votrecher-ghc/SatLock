@@ -178,6 +178,11 @@ end
 
 % -------------------------------------------------------------------------
 function [gt_x, gt_y, gt_pen_down] = build_ground_truth(letter, num_samples, span_cfg)
+if exist('gesture_template_library', 'file') == 2
+    [gt_x, gt_y, gt_pen_down] = gesture_template_library('groundtruth', letter, num_samples, span_cfg);
+    return;
+end
+
 sampling_rate = 25;
 stages = letter_stages(letter);
 stages = normalize_stages_to_span(stages, span_cfg.max_span_x, span_cfg.max_span_y);

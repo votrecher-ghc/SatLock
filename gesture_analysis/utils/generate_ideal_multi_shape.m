@@ -43,8 +43,13 @@ fprintf('--> 启动仿真 V7.2: 目标 [%s]，范围约束 %.2fm x %.2fm\n', ...
     char(target_letter), SIM.max_span_x, SIM.max_span_y);
 
 % -------------------- 字母模板 --------------------
-stages = letter_stages(target_letter);
-[stages, span_meta] = normalize_stages_to_span(stages, SIM.max_span_x, SIM.max_span_y);
+if exist('gesture_template_library', 'file') == 2
+    span_cfg = struct('max_span_x', SIM.max_span_x, 'max_span_y', SIM.max_span_y);
+    [stages, span_meta] = gesture_template_library('stages', target_letter, span_cfg);
+else
+    stages = letter_stages(target_letter);
+    [stages, span_meta] = normalize_stages_to_span(stages, SIM.max_span_x, SIM.max_span_y);
+end
 fprintf('    轨迹缩放系数: %.3f, 约束后跨度: [%.3fm, %.3fm]\n', ...
     span_meta.scale, span_meta.span_x, span_meta.span_y);
 

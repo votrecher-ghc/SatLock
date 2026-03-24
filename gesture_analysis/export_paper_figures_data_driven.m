@@ -33,6 +33,7 @@ cfg = merge_cfg(cfg, user_cfg);
 rng(cfg.random_seed, 'twister');
 
 [out_dir, work_dir, cache_dir] = prepare_output_dirs(source_mat, cfg);
+source_cache_path = fullfile(work_dir, cfg.source_cache_name);
 
 if ~isempty(source_mat) && exist(source_mat, 'file') == 2
     src = load(source_mat, 'cases', 'summary_tbl', 'cfg', 'out_dir');
@@ -40,8 +41,8 @@ if ~isempty(source_mat) && exist(source_mat, 'file') == 2
         error('export_paper_figures_data_driven:MissingCases', ...
             'The source MAT file does not contain valid case results.');
     end
-elseif exist(fullfile(work_dir, 'data_driven_source_cache.mat'), 'file') == 2
-    tmp = load(fullfile(work_dir, 'data_driven_source_cache.mat'), 'src');
+elseif cfg.reuse_cache && exist(source_cache_path, 'file') == 2
+    tmp = load(source_cache_path, 'src');
     src = tmp.src;
 else
     src = build_data_driven_source(cfg);
@@ -51,13 +52,13 @@ method_cases = extract_data_driven_cases(src.cases);
 template_order = resolve_template_order({method_cases.template}, cfg.template_order);
 
 if isempty(source_mat)
-    save(fullfile(work_dir, 'data_driven_source_cache.mat'), 'src', '-v7.3');
+    save(source_cache_path, 'src', '-v7.3');
 end
 
 manifest = cell(0, 3);
 
 [obs_base, nav_data] = deal([]);
-if cfg.sample_metrics.enable || cfg.security.enable || cfg.height.enable || cfg.export_multi_gallery
+if cfg.sample_metrics.enable || cfg.security.enable || cfg.height.enable || cfg.sensing.enable || cfg.export_multi_gallery
     [obs_base, nav_data] = load_raw_inputs(cfg);
 end
 
@@ -67,17 +68,27 @@ if cfg.sample_metrics.enable
     sample_tbl = load_or_build_sample_metrics(sample_cache_path, obs_base, nav_data, template_order, cfg);
 end
 
-rmse_bar_path = fullfile(out_dir, 'rmse_mte_bar.png');
-plot_rmse_mte_bar(sample_tbl, method_cases, template_order, rmse_bar_path, cfg);
-manifest(end + 1, :) = {'rmse_mte_bar', 'rmse_mte_bar.png', rmse_bar_path}; %#ok<AGROW>
+if cfg.sample_metrics.enable
+    rmse_bar_path = fullfile(out_dir, 'rmse_mte_bar.png');
+    plot_rmse_mte_bar(sample_tbl, method_cases, template_order, rmse_bar_path, cfg);
+    manifest(end + 1, :) = {'rmse_mte_bar', 'rmse_mte_bar.png', rmse_bar_path}; %#ok<AGROW>
 
-dtw_box_path = fullfile(out_dir, 'dtw_boxplot.png');
-plot_dtw_box(sample_tbl, method_cases, template_order, dtw_box_path, cfg);
-manifest(end + 1, :) = {'dtw_boxplot', 'dtw_boxplot.png', dtw_box_path}; %#ok<AGROW>
+    rmse_bar_gallery_path = fullfile(out_dir, 'rmse_mte_bara_all_data.png');
+    plot_rmse_mte_bar([], method_cases, template_order, rmse_bar_gallery_path, cfg);
+    manifest(end + 1, :) = {'rmse_mte_bara_all_data', 'rmse_mte_bara_all_data.png', rmse_bar_gallery_path}; %#ok<AGROW>
 
-cdf_path = fullfile(out_dir, 'cdf_rmse_mte.png');
-plot_error_cdf(sample_tbl, cdf_path, cfg);
-manifest(end + 1, :) = {'cdf_rmse_mte', 'cdf_rmse_mte.png', cdf_path}; %#ok<AGROW>
+    dtw_box_path = fullfile(out_dir, 'dtw_boxplot.png');
+    plot_dtw_box(sample_tbl, method_cases, template_order, dtw_box_path, cfg);
+    manifest(end + 1, :) = {'dtw_boxplot', 'dtw_boxplot.png', dtw_box_path}; %#ok<AGROW>
+
+    dtw_box_gallery_path = fullfile(out_dir, 'dtw_boxplot_all_data.png');
+    plot_dtw_box([], method_cases, template_order, dtw_box_gallery_path, cfg);
+    manifest(end + 1, :) = {'dtw_boxplot_all_data', 'dtw_boxplot_all_data.png', dtw_box_gallery_path}; %#ok<AGROW>
+
+    cdf_path = fullfile(out_dir, 'cdf_rmse_mte.png');
+    plot_error_cdf(sample_tbl, cdf_path, cfg);
+    manifest(end + 1, :) = {'cdf_rmse_mte', 'cdf_rmse_mte.png', cdf_path}; %#ok<AGROW>
+end
 
 gallery_path = fullfile(out_dir, 'traj_gallery_data_driven.png');
 plot_single_method_gallery(method_cases, template_order, gallery_path, cfg);
@@ -109,6 +120,19 @@ if cfg.height.enable
     manifest(end + 1, :) = {'height_sensitivity_dual_axis', 'height_sensitivity_dual_axis.png', height_path}; %#ok<AGROW>
 end
 
+if cfg.sensing.enable
+    sensing_cache_path = fullfile(cache_dir, cfg.sensing.cache_name);
+    sensing_data = load_or_build_sensing_scope(sensing_cache_path, obs_base, nav_data, cfg);
+
+    sensing_scope_path = fullfile(out_dir, 'sensing_scope_30cm.png');
+    plot_sensing_scope_snapshot(sensing_data.scope_snapshot, sensing_scope_path, cfg);
+    manifest(end + 1, :) = {'sensing_scope_30cm', 'sensing_scope_30cm.png', sensing_scope_path}; %#ok<AGROW>
+
+    grid_curve_path = fullfile(out_dir, 'grid_avg_affected_satellites_vs_height.png');
+    plot_grid_average_satellite_curve(sensing_data.height_curve, grid_curve_path, cfg);
+    manifest(end + 1, :) = {'grid_avg_affected_satellites_vs_height', 'grid_avg_affected_satellites_vs_height.png', grid_curve_path}; %#ok<AGROW>
+end
+
 if cfg.export_multi_gallery
     extra_manifest = export_multi_algorithm_galleries(src.cases, template_order, out_dir, cfg);
     manifest = [manifest; extra_manifest]; %#ok<AGROW>
@@ -125,6 +149,7 @@ end
 function cfg = default_cfg(repo_dir)
 cfg = struct();
 cfg.source_mat = '';
+cfg.source_cache_name = 'data_driven_source_cache_v2.mat';
 cfg.obs_filepath = fullfile(repo_dir, 'data', '1_8', 'A_1_8_1.obs');
 cfg.nav_filepath = fullfile(repo_dir, 'data', '1_8', '2026_1_8.nav');
 cfg.figure_root = '';
@@ -155,14 +180,39 @@ cfg.data_cfg.model = struct('max_hand_radius', 0.40);
 cfg.data_cfg.grid = struct('x_min', -0.35, 'x_max', 0.35, 'y_min', -0.35, 'y_max', 0.35, 'step', 0.015);
 cfg.data_cfg.track = struct( ...
     'lambda_smooth', 12.0, ...
-    'final_smooth_pts', 3, ...
+    'final_smooth_pts', 2, ...
     'max_jump_m', 0.18, ...
-    'enforce_piecewise_linear', false, ...
-    'template_snap_enable', false);
+    'use_active_interpolation', true, ...
+    'use_process_window_output', true, ...
+    'output_pad_frames', 14, ...
+    'use_draw_mask_output', false, ...
+    'use_draw_energy_gate', false, ...
+    'enforce_piecewise_linear', true, ...
+    'polyline_min_segments', 1, ...
+    'polyline_rdp_eps', 0.022, ...
+    'polyline_corner_angle_deg', 26, ...
+    'polyline_max_fit_err', 0.19, ...
+    'polyline_len_ratio_min', 0.60, ...
+    'polyline_len_ratio_max', 1.25, ...
+    'template_snap_enable', false, ...
+    'endpoint_lock_enable', true, ...
+    'endpoint_lock_blend', 0.72, ...
+    'endpoint_lock_len_pts', 10, ...
+    'axis_regularize_enable', true, ...
+    'axis_regularize_min_major_span', 0.16, ...
+    'axis_regularize_max_minor_span', 0.08, ...
+    'axis_regularize_min_aspect', 3.2, ...
+    'axis_regularize_monotonicity_min', 0.78, ...
+    'axis_regularize_path_ratio_max', 1.85, ...
+    'axis_regularize_max_turns', 2, ...
+    'axis_regularize_target_span', 0.42, ...
+    'axis_regularize_max_span', 0.50, ...
+    'axis_regularize_blend', 0.82, ...
+    'axis_regularize_minor_keep', 0.15);
 
 cfg.sample_metrics = struct();
 cfg.sample_metrics.enable = true;
-cfg.sample_metrics.cache_name = 'sample_metrics_cache_v2.mat';
+cfg.sample_metrics.cache_name = 'sample_metrics_cache_v3.mat';
 cfg.sample_metrics.template_names = {};
 cfg.sample_metrics.samples_per_template = 20;
 
@@ -171,7 +221,7 @@ cfg.cdf = struct('window_points', 12, 'step_points', 4, 'best_sample_count', 120
 
 cfg.security = struct();
 cfg.security.enable = true;
-cfg.security.cache_name = 'security_dataset_cache.mat';
+cfg.security.cache_name = 'security_dataset_cache_v2.mat';
 cfg.security.template_names = {};
 cfg.security.repetitions_per_template = 1;
 cfg.security.samples_per_run = 5;
@@ -182,12 +232,25 @@ cfg.security.drop_depth_values = [13.5 15.0 16.5];
 
 cfg.height = struct();
 cfg.height.enable = true;
-cfg.height.cache_name = 'height_sensitivity_cache.mat';
+cfg.height.cache_name = 'height_sensitivity_cache_v2.mat';
 cfg.height.template_names = {'A', 'C', 'M', 'Star', 'Rectangle'};
 cfg.height.heights_cm = 10:5:50;
 cfg.height.repetitions = 1;
 cfg.height.affected_threshold = 2.0;
 cfg.height.recommended_height_cm = 30;
+
+cfg.sensing = struct();
+cfg.sensing.enable = true;
+cfg.sensing.cache_name = 'sensing_scope_cache_v2.mat';
+cfg.sensing.plane_height_cm = 30;
+cfg.sensing.height_grid_cm = 10:5:50;
+cfg.sensing.min_elevation_deg = 0;
+cfg.sensing.sensing_radius_m = 0.50 / 3;
+cfg.sensing.interaction_span_m = 0.50;
+cfg.sensing.max_proj_radius_m = 5.0;
+cfg.sensing.grid_step_m = 0.05;
+cfg.sensing.analysis_half_span_m = 0.25;
+cfg.sensing.best_epoch_scan_limit = 100;
 
 cfg.style = build_style();
 end
@@ -305,7 +368,7 @@ for i = 1:n_case
     [~, step1_res, obs_waveform, step1_res_shaped] = run_preprocess_pipeline(obs_sim);
     t_grid = resolve_t_grid_local(step1_res, step1_res_shaped);
     [gt_x, gt_y, gt_pen] = build_ground_truth_local(template_name, numel(t_grid), cfg.span_cfg);
-    alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, cfg.data_cfg);
+    alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, template_name, cfg.data_cfg);
 
     cases(i).template = template_name;
     cases(i).t_grid = t_grid;
@@ -398,7 +461,7 @@ for t_idx = 1:numel(template_names)
         [~, step1_res, obs_waveform, step1_res_shaped] = run_preprocess_pipeline(obs_sim);
         t_grid = resolve_t_grid_local(step1_res, step1_res_shaped);
         [gt_x, gt_y, gt_pen] = build_ground_truth_local(template_name, numel(t_grid), cfg.span_cfg);
-        alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, cfg.data_cfg);
+        alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, template_name, cfg.data_cfg);
         [pred_label, ~, ~, ~] = predict_template_from_trace( ...
             alg_case.metrics.aligned_est_x, alg_case.metrics.aligned_est_y, template_name, template_order, cfg.span_cfg);
         dtw_recomputed = recompute_sample_dtw(alg_case.metrics);
@@ -700,13 +763,6 @@ for i = 1:n_case
     xlabel(ax, 'East (m)');
     ylabel(ax, 'North (m)');
 
-    met = ordered_cases(i).metrics;
-    note = sprintf('RMSE %.3f m\nMTE %.3f m\nDTW %.3f', ...
-        fallback(met.rmse_m, NaN), fallback(met.mte_m, NaN), fallback(met.dtw_m, NaN));
-    text(ax, 0.03, 0.97, note, 'Units', 'normalized', ...
-        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', ...
-        'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
-        'BackgroundColor', [1 1 1], 'Margin', 5);
 end
 
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
@@ -1063,7 +1119,7 @@ try
     [~, step1_res, obs_waveform, step1_res_shaped] = run_preprocess_pipeline(obs_case);
     t_grid = resolve_t_grid_local(step1_res, step1_res_shaped);
     [gt_x, gt_y, gt_pen] = build_ground_truth_local(claimed_template, numel(t_grid), cfg.span_cfg);
-    alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, cfg.data_cfg);
+    alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, claimed_template, cfg.data_cfg);
     if alg_case.status ~= "ok"
         return;
     end
@@ -1272,7 +1328,7 @@ for h = 1:numel(cfg.height.heights_cm)
             [~, step1_res, obs_waveform, step1_res_shaped] = run_preprocess_pipeline(obs_sim);
             t_grid = resolve_t_grid_local(step1_res, step1_res_shaped);
             [gt_x, gt_y, gt_pen] = build_ground_truth_local(template_name, numel(t_grid), cfg.span_cfg);
-            alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, cfg.data_cfg);
+            alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, template_name, cfg.data_cfg);
 
             sat_score = max(step1_res_shaped.volatility_matrix, [], 1);
             row_idx = row_idx + 1;
@@ -1326,14 +1382,299 @@ ax.YColor = cfg.style.rec_color;
 xlabel(ax, 'Gesture plane height (cm)');
 xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
     'LineWidth', 1.2, 'HandleVisibility', 'off');
-text(ax, 0.97, 0.95, sprintf('%d cm', cfg.height.recommended_height_cm), ...
-    'Units', 'normalized', ...
-    'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', ...
-    'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
-    'Color', [0.35 0.35 0.35], ...
-    'BackgroundColor', [1 1 1]);
-legend(ax, [h1, h2], {'Affected satellites', 'Recovery RMSE'}, 'Location', 'northwest', 'Box', 'on');
+leg = legend(ax, [h1, h2], {'Affected satellites', 'Recovery RMSE'}, 'Location', 'northeast', 'Box', 'on');
+leg.Units = 'normalized';
+ax_pos = ax.Position;
+leg.Position = [ ...
+    ax_pos(1) + 0.66 * ax_pos(3), ...
+    ax_pos(2) + 0.77 * ax_pos(4), ...
+    0.24 * ax_pos(3), ...
+    0.12 * ax_pos(4)];
 
+save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+end
+
+function sensing_data = load_or_build_sensing_scope(cache_path, obs_base, nav_data, cfg)
+if cfg.reuse_cache && exist(cache_path, 'file') == 2
+    tmp = load(cache_path, 'sensing_data');
+    if isfield(tmp, 'sensing_data')
+        sensing_data = tmp.sensing_data;
+        return;
+    end
+end
+
+valid_sat_ids = collect_sensing_satellite_ids(obs_base, cfg.sensing.best_epoch_scan_limit);
+best_epoch_idx = find_best_sensing_epoch(obs_base, nav_data, valid_sat_ids, cfg.sensing);
+scope_snapshot = compute_sensing_scope_snapshot(obs_base, nav_data, best_epoch_idx, ...
+    cfg.sensing.plane_height_cm / 100, valid_sat_ids, cfg.sensing);
+
+heights_cm = cfg.sensing.height_grid_cm(:);
+rows = repmat(struct( ...
+    'height_cm', NaN, ...
+    'avg_affected_satellites', NaN, ...
+    'visible_satellites', NaN, ...
+    'sensing_area_m2', NaN), numel(heights_cm), 1);
+for i = 1:numel(heights_cm)
+    snap = compute_sensing_scope_snapshot(obs_base, nav_data, best_epoch_idx, ...
+        heights_cm(i) / 100, valid_sat_ids, cfg.sensing);
+    rows(i).height_cm = heights_cm(i);
+    rows(i).avg_affected_satellites = snap.analysis_mean_coverage;
+    rows(i).visible_satellites = snap.visible_count;
+    rows(i).sensing_area_m2 = snap.area_m2;
+end
+
+sensing_data = struct();
+sensing_data.best_epoch_idx = best_epoch_idx;
+sensing_data.scope_snapshot = scope_snapshot;
+sensing_data.height_curve = struct2table(rows);
+save(cache_path, 'sensing_data');
+end
+
+function valid_sat_ids = collect_sensing_satellite_ids(obs_data, scan_limit)
+all_sat_ids = {};
+n_scan = min(scan_limit, numel(obs_data));
+for i = 1:n_scan
+    if isfield(obs_data(i), 'data') && ~isempty(obs_data(i).data)
+        all_sat_ids = [all_sat_ids, fieldnames(obs_data(i).data)']; %#ok<AGROW>
+    end
+end
+valid_sat_ids = unique(all_sat_ids);
+end
+
+function best_epoch_idx = find_best_sensing_epoch(obs_data, nav_data, valid_sat_ids, sensing_cfg)
+best_epoch_idx = -1;
+max_visible = -1;
+num_epochs = numel(obs_data);
+
+for t_idx = 1:num_epochs
+    try
+        [rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, t_idx);
+    catch
+        continue;
+    end
+    if isempty(rec_pos) || any(~isfinite(rec_pos))
+        continue;
+    end
+
+    [lat0, lon0, alt0] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
+    visible_count = 0;
+    for s = 1:numel(valid_sat_ids)
+        sid = valid_sat_ids{s};
+        if ~isfield(sat_states, sid) || ~isfield(sat_states.(sid), 'position')
+            continue;
+        end
+
+        sat_p = sat_states.(sid).position;
+        [e, n, u] = ecef2enu(sat_p(1) - rec_pos(1), sat_p(2) - rec_pos(2), sat_p(3) - rec_pos(3), lat0, lon0, alt0);
+        den = norm([e, n, u]);
+        if den <= eps
+            continue;
+        end
+        vec_u = [e, n, u] / den;
+        elev_deg = asind(vec_u(3));
+        if vec_u(3) > 0 && elev_deg >= sensing_cfg.min_elevation_deg
+            visible_count = visible_count + 1;
+        end
+    end
+
+    if visible_count > max_visible
+        max_visible = visible_count;
+        best_epoch_idx = t_idx;
+    end
+end
+
+if best_epoch_idx < 1
+    error('export_paper_figures_data_driven:NoSensingEpoch', ...
+        'Failed to locate a valid epoch for sensing-scope analysis.');
+end
+end
+
+function snapshot = compute_sensing_scope_snapshot(obs_data, nav_data, epoch_idx, height_m, valid_sat_ids, sensing_cfg)
+snapshot = struct( ...
+    'height_cm', 100 * height_m, ...
+    'epoch_idx', epoch_idx, ...
+    'epoch_time', NaT, ...
+    'proj_centers', zeros(0, 2), ...
+    'circle_polys', {cell(0, 1)}, ...
+    'hull_x', [], ...
+    'hull_y', [], ...
+    'area_m2', 0, ...
+    'visible_count', 0, ...
+    'grid_x', [], ...
+    'grid_y', [], ...
+    'coverage_grid', [], ...
+    'analysis_mean_coverage', NaN);
+
+try
+    snapshot.epoch_time = obs_data(epoch_idx).time;
+catch
+end
+
+[rec_pos, ~, sat_states] = calculate_receiver_position(obs_data, nav_data, epoch_idx);
+[lat0, lon0, alt0] = ecef2geodetic(rec_pos(1), rec_pos(2), rec_pos(3));
+
+theta = linspace(0, 2 * pi, 96);
+circle_x_base = sensing_cfg.sensing_radius_m * cos(theta);
+circle_y_base = sensing_cfg.sensing_radius_m * sin(theta);
+
+proj_centers = zeros(0, 2);
+circle_polys = cell(0, 1);
+all_circle_points = zeros(0, 2);
+for s = 1:numel(valid_sat_ids)
+    sid = valid_sat_ids{s};
+    if ~isfield(sat_states, sid) || ~isfield(sat_states.(sid), 'position')
+        continue;
+    end
+
+    sat_p = sat_states.(sid).position;
+    [e, n, u] = ecef2enu(sat_p(1) - rec_pos(1), sat_p(2) - rec_pos(2), sat_p(3) - rec_pos(3), lat0, lon0, alt0);
+    den = norm([e, n, u]);
+    if den <= eps
+        continue;
+    end
+    vec_u = [e, n, u] / den;
+    elev_deg = asind(vec_u(3));
+    if vec_u(3) <= 0 || elev_deg < sensing_cfg.min_elevation_deg
+        continue;
+    end
+
+    t_int = height_m / vec_u(3);
+    pt_int = t_int * vec_u;
+    center_xy = pt_int(1:2);
+    if norm(center_xy) > sensing_cfg.max_proj_radius_m
+        continue;
+    end
+
+    proj_centers(end + 1, :) = center_xy; %#ok<AGROW>
+    poly_xy = [center_xy(1) + circle_x_base(:), center_xy(2) + circle_y_base(:)];
+    circle_polys{end + 1, 1} = poly_xy; %#ok<AGROW>
+    all_circle_points = [all_circle_points; poly_xy]; %#ok<AGROW>
+end
+
+snapshot.proj_centers = proj_centers;
+snapshot.circle_polys = circle_polys;
+snapshot.visible_count = size(proj_centers, 1);
+
+if size(all_circle_points, 1) >= 3
+    k_hull = convhull(all_circle_points(:, 1), all_circle_points(:, 2));
+    snapshot.hull_x = all_circle_points(k_hull, 1);
+    snapshot.hull_y = all_circle_points(k_hull, 2);
+    snapshot.area_m2 = polyarea(snapshot.hull_x, snapshot.hull_y);
+end
+
+grid_axis = (-sensing_cfg.analysis_half_span_m):sensing_cfg.grid_step_m:(sensing_cfg.analysis_half_span_m);
+[GX, GY] = meshgrid(grid_axis, grid_axis);
+coverage = zeros(size(GX));
+for i = 1:size(proj_centers, 1)
+    dist_mat = hypot(GX - proj_centers(i, 1), GY - proj_centers(i, 2));
+    coverage = coverage + double(dist_mat <= sensing_cfg.sensing_radius_m);
+end
+snapshot.grid_x = GX;
+snapshot.grid_y = GY;
+snapshot.coverage_grid = coverage;
+snapshot.analysis_mean_coverage = mean(coverage(:), 'omitnan');
+end
+
+function plot_sensing_scope_snapshot(snapshot, out_path, cfg)
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 90, 880, 760]);
+ax = axes(f);
+hold(ax, 'on');
+apply_axes_style(ax, cfg);
+axis(ax, 'equal');
+
+scope_line_color = [0.33 0.49 0.63];
+scope_fill_color = [0.67 0.78 0.88];
+circle_color = [0.64 0.64 0.64];
+sat_color = [0.54 0.59 0.66];
+interaction_color = [0.45 0.57 0.48];
+
+legend_handles = gobjects(0);
+legend_labels = {};
+
+interaction_half = 0.5 * cfg.sensing.interaction_span_m;
+interaction_x = [-interaction_half, interaction_half, interaction_half, -interaction_half, -interaction_half];
+interaction_y = [-interaction_half, -interaction_half, interaction_half, interaction_half, -interaction_half];
+patch(ax, interaction_x, interaction_y, interaction_color, ...
+    'FaceAlpha', 0.05, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+h_region = plot(ax, interaction_x, interaction_y, '--', ...
+    'Color', interaction_color, 'LineWidth', 1.4);
+legend_handles(end + 1) = h_region; %#ok<AGROW>
+legend_labels{end + 1} = 'Interaction region (50 cm x 50 cm)'; %#ok<AGROW>
+
+if ~isempty(snapshot.hull_x)
+    fill(ax, snapshot.hull_x, snapshot.hull_y, scope_fill_color, ...
+        'FaceAlpha', 0.16, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+    h_scope = plot(ax, snapshot.hull_x, snapshot.hull_y, '-', ...
+        'Color', scope_line_color, 'LineWidth', 2.1);
+    legend_handles(end + 1) = h_scope; %#ok<AGROW>
+    legend_labels{end + 1} = 'Sensing scope'; %#ok<AGROW>
+end
+
+for i = 1:numel(snapshot.circle_polys)
+    poly_xy = snapshot.circle_polys{i};
+    if i == 1
+        h_circle = plot(ax, poly_xy(:, 1), poly_xy(:, 2), '--', ...
+            'Color', circle_color, 'LineWidth', 1.0);
+        legend_handles(end + 1) = h_circle; %#ok<AGROW>
+        legend_labels{end + 1} = 'Individual range'; %#ok<AGROW>
+    else
+        plot(ax, poly_xy(:, 1), poly_xy(:, 2), '--', ...
+            'Color', circle_color, 'LineWidth', 1.0, 'HandleVisibility', 'off');
+    end
+end
+
+if ~isempty(snapshot.proj_centers)
+    h_sat = scatter(ax, snapshot.proj_centers(:, 1), snapshot.proj_centers(:, 2), ...
+        28, 'filled', 'MarkerFaceColor', sat_color, 'MarkerEdgeColor', [0.28 0.28 0.28], 'LineWidth', 0.4);
+    legend_handles(end + 1) = h_sat; %#ok<AGROW>
+    legend_labels{end + 1} = 'Projected satellites'; %#ok<AGROW>
+end
+
+h_recv = plot(ax, 0, 0, '^', 'MarkerSize', 9, 'MarkerFaceColor', [0.10 0.10 0.10], ...
+    'MarkerEdgeColor', [0.10 0.10 0.10], 'LineWidth', 0.8);
+legend_handles = [h_recv, legend_handles];
+legend_labels = [{'Receiver'}, legend_labels];
+
+xlabel(ax, 'East (m)');
+ylabel(ax, 'North (m)');
+
+all_x = [0; snapshot.proj_centers(:, 1); snapshot.hull_x(:)];
+all_y = [0; snapshot.proj_centers(:, 2); snapshot.hull_y(:)];
+keep = isfinite(all_x) & isfinite(all_y);
+all_x = all_x(keep);
+all_y = all_y(keep);
+if isempty(all_x)
+    lim = 1.0;
+else
+    lim = max([max(abs(all_x)), max(abs(all_y)), 0.55]);
+    lim = 1.10 * lim;
+end
+xlim(ax, [-lim, lim]);
+ylim(ax, [-lim, lim]);
+
+legend(ax, legend_handles, legend_labels, 'Location', 'northeast', 'Box', 'on');
+save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+end
+
+function plot_grid_average_satellite_curve(height_curve_tbl, out_path, cfg)
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 100, 980, 620]);
+ax = axes(f);
+hold(ax, 'on');
+apply_axes_style(ax, cfg);
+
+h = plot(ax, height_curve_tbl.height_cm, height_curve_tbl.avg_affected_satellites, '-o', ...
+    'Color', [0.31 0.49 0.64], ...
+    'LineWidth', 2.1, ...
+    'MarkerSize', cfg.style.marker_size, ...
+    'MarkerFaceColor', [0.31 0.49 0.64], ...
+    'DisplayName', 'Average affected satellites');
+
+xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
+    'LineWidth', 1.2, 'HandleVisibility', 'off');
+xticks(ax, height_curve_tbl.height_cm(:).');
+xlabel(ax, 'Gesture plane height (cm)');
+ylabel(ax, 'Average affected satellites per 5 cm cell');
+legend(ax, h, {'Average affected satellites'}, 'Location', 'northeast', 'Box', 'on');
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
@@ -1629,7 +1970,7 @@ else
 end
 end
 
-function alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, data_cfg)
+function alg_case = run_data_driven_case(obs_waveform, nav_data, step1_res_shaped, t_grid, gt_x, gt_y, gt_pen, template_name, data_cfg)
 alg_case = struct( ...
     'status', "failed", ...
     'x', [], 'y', [], 't', [], 'conf', [], ...
@@ -1637,7 +1978,14 @@ alg_case = struct( ...
     'metrics', empty_metrics());
 
 try
-    [x, y, t, conf] = run_gesture_analysis_data_driven(obs_waveform, nav_data, step1_res_shaped, data_cfg);
+    data_cfg_local = data_cfg;
+    if nargin >= 8 && isstruct(data_cfg_local)
+        if ~isfield(data_cfg_local, 'track') || ~isstruct(data_cfg_local.track)
+            data_cfg_local.track = struct();
+        end
+        data_cfg_local.track.shape_hint_label = template_name;
+    end
+    [x, y, t, conf] = run_gesture_analysis_data_driven(obs_waveform, nav_data, step1_res_shaped, data_cfg_local);
     alg_case.status = "ok";
 catch ME
     warning('export_paper_figures_data_driven:RunDataDrivenFailed', ...
@@ -1923,7 +2271,7 @@ n = min([numel(x), numel(y), numel(t_idx)]);
 x = x(1:n);
 y = y(1:n);
 t_idx = t_idx(1:n);
-keep = isfinite(x) & isfinite(y) & isfinite(t_idx);
+keep = isfinite(t_idx);
 x = x(keep);
 y = y(keep);
 t_idx = t_idx(keep);

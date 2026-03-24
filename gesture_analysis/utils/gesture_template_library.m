@@ -257,7 +257,7 @@ switch label
         P4 = [-0.30, -0.40];
         stages = {
             P1, P2, 1.5, true;
-            P2, P3, 3.0, false;
+            P2, P3, 1.2, true;
             P3, P4, 1.5, true
         };
 

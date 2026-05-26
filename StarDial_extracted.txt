@@ -1,0 +1,1321 @@
+
+
+===== PAGE 1 =====
+StarDial: Spatiotemporal Identity Authentication via
+GNSS Shadow Gestures
+Anonymous Authors
+Abstract—In the era of Cyber-Physical Systems (CPS), ver-
+ifying the legitimacy of an operator requires more than just
+digital identity; it demands proof of spatiotemporal presence.
+Existing authentication mechanisms, such as cryptography and
+biometrics, are fundamentally location-agnostic, creating a “spa-
+tiotemporal disconnect” that leaves systems vulnerable to remote
+spoofing and replay attacks. To bridge this gap, we propose
+StarDial, a physical-layer security primitive that leverages the
+Global Navigation Satellite System (GNSS) not as a position-
+ing tool, but as a dynamic spatial cipher. By utilizing the
+Geometric Theory of Diffraction (GTD), StarDial analyzes the
+specific signal fluctuations (C/N0) induced by hand gestures
+cutting across satellite Line-of-Sight (LoS) rays. This interaction
+creates a “Triple Binding” of user identity, physical time, and
+geographic location. We demonstrate that StarDial effectively
+detects advanced threats, including generative SDR spoofing and
+remote ghost attacks, by identifying the inevitable “Geometric
+Mismatch” between fake digital signals and real physical diffrac-
+tion patterns.
+I. INTRODUCTION
+As Cyber-Physical Systems (CPS) become ubiquitous—
+ranging from autonomous drones navigating complex airspace
+to robotic dogs inspecting remote infrastructure, and critical
+grids maintaining synchronous operations—the boundary be-
+tween the digital and physical worlds is dissolving [1], [2],
+[3]. These systems do not merely process data; they execute
+physical operations.
+Consequently, the core paradigm of security is shifting: ver-
+ifying operator legitimacy can no longer rely solely on “who
+you are” (Identity), but must simultaneously confirm “where
+and when you are” (Spatiotemporal Context) [4], [5], [6]. In
+physical reality, permissions for high-stakes operations—such
+as unlocking a geo-fenced perimeter, opening dam gates, or
+landing a drone—are intrinsically bound to specific geographic
+locations and time windows.
+However, existing security authentication architectures (e.g.,
+PKI digital signatures or biometrics) suffer from a fundamental
+logical flaw: they are Location-Agnostic. Digital keys are
+essentially bitstreams decoupled from physical carriers, and
+biometric data can be digitized and stored. This means that
+while traditional mechanisms can perfectly verify the “cor-
+rectness of the key,” they fail to perceive the “physical scene
+of the operation.” This dangerous severance between Digital
+Privilege and Physical Reality opens a massive backdoor for
+attackers [2], [4], [5]. By leveraging Software-Defined Radios
+(SDR) to synthesize fake GPS signals, or using Generative
+AI to forge sensor data, attackers can digitally “teleport”
+to a target site while physically remaining remote. These
+Fig. 1.
+StarDial Concept Overview. (a) Traditional authentication faces
+the risk of “Spatiotemporal Disconnect,” where attackers can execute remote
+replay or spoofing attacks. (b) StarDial constructs a “Proof of Spatiotemporal
+Consistency” using GNSS signal diffraction. Through the physical interaction
+of “Human-Satellite-Receiver,” the system forcefully binds the user’s Identity
+(Gesture Trajectory), Time (Instantaneous Satellite Constellation), and Space
+(Receiver Geographic Coordinates), forming a physical-layer security loop
+that cannot be simulated remotely.
+“Remote Ghost Attacks” allow adversaries to bypass geo-
+fencing defenses and hijack field infrastructure without phys-
+ical exposure [7], [8], [9]. Therefore, reconstructing a strong
+binding between digital identity and physical spacetime has
+become an urgent imperative for CPS security.
+To fill this security vacuum, a mechanism is required
+to forcefully “anchor” a user’s digital behavior to verifi-
+able physical spacetime coordinates. The Global Navigation
+Satellite System (GNSS) offers a unique, often overlooked
+opportunity for this purpose. While typically viewed merely
+as a positioning tool with known vulnerabilities to spoofing,
+GNSS actually provides a globally covered, tamper-proof,
+and instantaneously changing “Dynamic Spatial Cipher.” As
+illustrated in Fig. 1, at any given moment, the dozens of
+satellites visible above a receiver constitute a 3D Constellation
+Geometry that is unique in the universe [10], [11], [12]. Unless
+an attacker can physically occupy the target location and
+reconstruct the electromagnetic propagation paths of the entire
+celestial hemisphere in real time, simulating this macroscopic
+geometric feature is physically infeasible.
+Building on this insight, we propose StarDial, a novel
+physical-layer security primitive. StarDial is not merely a
+defense system against GNSS spoofing, but a mechanism
+
+
+===== PAGE 2 =====
+for proof of spatiotemporal consistency. Its fundamental
+principle leverages the receiver antenna as a near-field sensing
+probe, requiring the user to perform specific gestures (e.g.,
+sliding). According to the Geometric Theory of Diffraction
+(GTD), since satellite signals arriving at the ground can
+be treated as plane waves, when a hand moves within the
+antenna’s near-field region, it physically cuts the Line-of-Sight
+(LoS) rays from space. This cutting is not a simple blockage;
+it triggers a coherent superposition of the direct field and the
+diffracted field generated by the hand’s edge, inducing specific
+oscillation patterns in the received signal’s Carrier-to-Noise
+Ratio (C/N0). This fluctuation characteristic is governed by
+the Fresnel diffraction integral relative to the distance between
+the hand edge and the LoS path [13], [14], [10].
+The core innovation of StarDial lies in utilizing the physical
+interaction among “Human, Satellite, and Receiver” to con-
+struct a “Triple Binding” mechanism that is computationally
+hard to simulate:
+• Binding to Identity: Different sliding paths cover dif-
+ferent spatial regions, thereby cutting specific subsets of
+satellites. The user’s specific gesture trajectory defines a
+unique modulation pattern on the signals, acting as an
+unforgeable “Physical Password.”
+• Binding to Time: The satellite constellation is in con-
+tinuous high-speed motion, with azimuth and elevation
+angles changing dynamically. As a result, a diffraction
+fingerprint that is valid at one moment may become in-
+valid at the next, due to the shift in geometric perspective.
+This temporal variation provides a natural defense against
+replay attacks.
+• Binding to Space: The incidence angles of satellite LoS
+rays are strictly dependent on the receiver’s geographic
+location. Only at the true coordinates can the gesture
+trajectory T satisfy the geometric constraints of all ob-
+structed satellites.
+This mechanism fundamentally shifts the asymmetry of
+offense and defense. In traditional GNSS spoofing scenarios,
+an attacker only needs to generate fake digital signals to
+deceive the receiver’s solving logic. In StarDial’s threat model,
+the attacker faces a physical “Impossible Triangle”: even
+if they use SDR to generate fake GPS coordinate signals,
+they cannot physically reconstruct the true electromagnetic
+incidence paths distributed across the real sky. When a user’s
+hand passes over the antenna, a Geometric Mismatch occurs
+between the real physical shadowing (caused by the hand) and
+the fake virtual geometry (implied by the spoofed signals).
+This contradiction, guaranteed by physical laws, serves as
+strong evidence for detecting high-level spoofing attacks.
+The main contributions of this paper are as follows:
+1) Theoretical Modeling: We establish a near-field ges-
+ture diffraction model based on GTD, transforming the
+gesture recognition problem into a geometric inversion
+problem within the 3D LoS vector field, quantifying
+the relationship between Fresnel diffraction integrals and
+signal fluctuations.
+(a) Discrete 3D LoS vector field.
+(b) Gesture-induced multi-satellite LoS perturbations and signal responses.
+Fig. 2.
+Schematic of the LoS vector field and gesture-induced GNSS
+perturbations. (a) Satellites above the receiver form a discrete 3D LoS Vector
+Field L. (b) As the hand moves from the start point to the end point within
+the antenna’s near-field region, it sequentially intersects the LoS paths of a
+subset of satellites. As a result, only the affected links exhibit time-ordered
+C/N0 fluctuations, while unaffected satellites remain nearly stable.
+2) Security Paradigm: We introduce the paradigm of spa-
+tiotemporal consistency authentication based on “Hand-
+Satellite” interaction, demonstrating its intrinsic security
+against replay attacks, SDR-based generative spoofing,
+and man-in-the-middle attacks.
+3) System Implementation: We implement a StarDial
+prototype on commercial GNSS receivers and conduct
+extensive evaluations in diverse outdoor multipath en-
+vironments. The results show that the system achieves
+robust user liveness and presence authentication using
+only a single antenna without additional sensors.
+II. BACKGROUND & MOTIVATION
+This section introduces the fundamental physical properties
+of GNSS signal propagation and the key metrics of receiver
+observables, followed by the definition of attack scenarios,
+attacker capabilities, and security assumptions considered in
+this work [10], [7], [15].
+A. GNSS Primer: Signal Power and Geometric Diversity
+Global Navigation Satellite Systems (GNSS) broadcast ra-
+dio signals from constellations in Medium Earth Orbit (MEO)
+[11]. For ground-based receivers, the system provides two key
+physical attributes that form the foundation of StarDial.
+
+
+===== PAGE 3 =====
+(a) Legitimate Access (Consistent)
+(b) Generative Spoofing (Spatial Mismatch)
+(c) Replay Attack (Temporal Mismatch)
+(d) Remote Ghost Attack (Physical Mismatch)
+Fig. 3. Authentication outcomes under legitimate access and representative
+attacks. Under legitimate access, the gesture-induced perturbation pattern is
+consistent with the true satellite geometry. In contrast, generative spoofing,
+replay, and remote ghost attacks are rejected because they violate spatial,
+temporal, and physical consistency, respectively.
+1) Signal Propagation and C/N0: Since the orbital altitude
+is approximately 20,000 km, far exceeding the distance be-
+tween the receiver and surrounding objects, the GNSS signal
+wavefront arriving at the ground can be treated as a Plane
+Wave. A core metric output by the receiver is the Carrier-
+to-Noise Density Ratio (C/N0), which characterizes signal
+strength [11], [16]. Under Line-of-Sight (LoS) conditions,
+C/N0 typically remains stable. However, when an obstacle
+(such as a human hand) exists in the propagation path, the
+signal undergoes diffraction and attenuation.
+As shown in Fig. 2, according to the Geometric Theory of
+Diffraction (GTD), this near-field shadowing is not a simple
+binary “on/off” effect. Instead, it induces specific continuous
+fluctuations in C/N0, where the fluctuation pattern is strictly
+correlated with the distance of the obstacle edge relative to the
+LoS ray [13], [14]. This makes C/N0 an ideal physical probe
+for sensing minute near-field geometric changes.
+2) Dynamic 3D Geometry: At any time instance t, the
+visible satellites above the receiver form a discrete spatial
+distribution. We model this distribution as a 3D LoS Vector
+Field centered at the receiver [7], [12]. This vector field
+possesses two significant security properties:
+• Spatial Uniqueness: Observers at different geographic
+locations p perceive different satellite azimuths and ele-
+vations; thus, the geometry is a function of location.
+• Temporal Variance: Due to the high-speed motion of
+satellites, the vector field evolves continuously over time.
+This instantaneous geometric configuration constitutes a
+natural, unpredictable source of entropy.
+B. Physical Basis and Observable Model
+GNSS satellites broadcast L-band signals with wavelengths
+of approximately λ ≈19 ∼24 cm. Since the satellite-
+receiver distance is much larger than the scale of the local
+interaction region, the incident GNSS signals at the ground can
+be approximated as plane waves. When a user’s hand enters
+the near-field region above the receiver antenna, it behaves not
+merely as a simple blocker, but as a finite knife-edge obstacle
+that perturbs the Line-of-Sight (LoS) propagation path.
+The total electric field at the receiver is therefore the
+coherent superposition of the direct LoS component and the
+scattered/diffracted components generated by the hand edges.
+In the complex baseband domain, the received signal can be
+written as
+r(t) = αLoSe−jϕLoS +
+X
+k
+αdiff,k(t)e−j(ϕLoS+∆ϕk(t)) + n(t),
+(1)
+where α denotes amplitude, ϕ denotes phase, and ∆ϕk(t) is
+the phase delay of the k-th diffracted path relative to the direct
+path.
+As the hand moves, the path-length difference between the
+diffracted and direct components changes continuously, caus-
+ing alternating constructive and destructive interference. This
+process produces characteristic oscillations in the received
+Carrier-to-Noise Density Ratio (C/N0), making C/N0 a use-
+ful observable for sensing fine-grained near-field geometric
+perturbations.
+To quantify this effect, StarDial adopts a Fresnel-zone-
+based model. For a given satellite-receiver link, when the
+gesture trajectory T(t) approaches or crosses the LoS path,
+the hand edge traverses successive Fresnel zones. The resulting
+attenuation factor can be described by the Fresnel integral:
+F(v) = 1 + j 2
+Z ∞
+v
+e−j π
+2 τ 2dτ,
+(2)
+where v is the dimensionless Fresnel diffraction parameter:
+v(t) = h(t)
+s
+2(dT X + dRX)
+λdT XdRX
+≈h(t)
+r
+2
+λdRX
+.
+(3)
+Here, h(t) is the perpendicular distance between the hand edge
+and the LoS ray, and dRX is the distance from the hand to the
+receiver antenna, with dRX ≪dT X in the near-field setting.
+
+
+===== PAGE 4 =====
+This model indicates that the frequency and envelope of
+the observed C/N0 fluctuations are jointly determined by
+the gesture geometry and the instantaneous satellite-receiver
+configuration. Consequently, reproducing such fluctuations re-
+quires not only forged digital GNSS content but also physically
+consistent near-field diffraction dynamics, which substantially
+increases the difficulty of spoofing and replay attacks.
+C. Threat Model
+Our goal is to defend against attackers attempting to deceive
+the StarDial system to gain unauthorized access. We consider
+three primary attack types, with their core characteristics
+illustrated in Fig. 3.
+1) Generative Spoofing (SDR Attacks): This represents the
+most advanced GNSS threat. Attackers use Software-Defined
+Radios (SDR) and open-source tools (e.g., GPS-SDR-SIM) to
+synthesize fake RF signals complying with standard protocols.
+• Goal: The attacker is at Location A but forges the illusion
+that the receiver is at Target Location B to bypass geo-
+fencing.
+• Attack Capability: As shown in Fig. 3(b), the attacker
+transmits forged GNSS-like RF signals from a local SDR
+source to manipulate the receiver’s perceived position.
+• Physical Contradiction: Although forged SDR signals
+can manipulate digital GNSS observations, they are typi-
+cally emitted from a single source or a limited directional
+cluster rather than from the sky-distributed geometry of
+real satellites. Consequently, they cannot reproduce the
+true multi-directional LoS incidence structure. When the
+user performs a gesture above the antenna, the result-
+ing perturbation pattern becomes inconsistent with the
+claimed satellite geometry, leading to a spatial mismatch,
+as illustrated in Fig. 3(b).
+2) Replay Attacks: In a standard replay attack, the attacker
+typically records only ordinary ambient received signals at a
+given moment. However, under a more advanced threat model,
+the attacker pre-records the raw RF signals (I/Q data) captured
+while a legitimate user is performing a gesture at the target
+location, and subsequently replays these signals at a later time.
+• Goal: Using expired legitimate signals to bypass authen-
+tication.
+• Attack Capability: As shown in Fig. 3(c), the attacker
+re-injects previously captured RF recordings from an
+earlier legitimate session into the receiver chain at a later
+time.
+• Physical Contradiction: Replay attacks may preserve
+authentic diffraction signatures from a past legitimate
+interaction, but those signatures remain tied to the his-
+torical satellite configuration at the time of recording.
+Since the constellation evolves continuously, the replayed
+waveform no longer matches the current azimuth, eleva-
+tion, and projected contact-point geometry. As a result,
+replayed signals fail the current consistency check and
+manifest as a temporal mismatch, as shown in Fig. 3(c).
+3) Remote Ghost Attacks: Attackers intrude into the field
+IoT device via the network, attempting to inject fake sensor
+data (e.g., tampering with NMEA sentences or C/N0 readings)
+from the OS level, completely bypassing the physical antenna.
+• Goal: Bypass the physical sensing path and directly forge
+observation data to obtain unauthorized authentication.
+• Attack Capability: As shown in Fig. 3(d), the attacker
+operates at the software or middleware layer and injects
+fabricated navigation or signal-quality data without inter-
+acting with the antenna or RF front-end.
+• Physical Contradiction: Since the forged observations
+do not pass through the real antenna and physical channel,
+they lack the analog characteristics of genuine near-field
+diffraction, including the continuous structures induced
+by Fresnel-zone traversal, phase drift, and cooperative
+multi-satellite responses. Therefore, they cannot faithfully
+reproduce the physical interaction required by StarDial
+and are exposed as a physical mismatch, as shown in
+Fig. 3(d).
+D. Security Assumptions
+To clarify StarDial’s security boundaries, we establish the
+following core assumptions.
+1) Trust Model:
+• Untrusted: We do not trust any digital signal content
+received (including navigation messages, timestamps, or
+solved coordinates), as these can be fully synthesized by
+SDR.
+• Trusted: We trust the Geometric Theory of Diffraction
+(GTD) and Public Ephemeris Data. We assume electro-
+magnetic wave propagation follows Maxwell’s equations,
+and the true orbital positions of satellites cannot be
+physically moved by the attacker.
+2) Core Physical Assumption: Inability to Reconstruct 3D
+Wavefronts: This is the cornerstone of StarDial’s security. We
+assume the attacker cannot construct a massive hemispherical
+antenna array around the target receiver to simulate the true
+physical Angle of Arrival (AoA) for every satellite. Such
+“Sky-Dome” scale infrastructure is impractical in covert attack
+scenarios.
+III. SYSTEM DESIGN
+This section describes how StarDial transforms raw GNSS
+observations into authentication decisions through signal pre-
+processing, diffraction feature extraction, gesture-plane geo-
+metric inversion, and spatiotemporal consistency authentica-
+tion.
+A. Signal Preprocessing
+Due to the complexity of outdoor environments, raw GNSS
+observational data is typically non-uniformly sampled and
+noise-corrupted. The objective of the preprocessing module
+is to transform raw observations from multiple constellations
+into aligned, clean Carrier-to-Noise Ratio (C/N0) waveforms.
+
+
+===== PAGE 5 =====
+Fig. 4.
+Overview of the StarDial system pipeline. Starting from raw GNSS observations, the system performs signal preprocessing, diffraction feature
+extraction, gesture-plane geometric inversion, and spatiotemporal consistency authentication to produce the final authentication result. Genuine observations
+are accepted when the reconstructed interaction is consistent with the extracted perturbation segments under the current satellite geometry, whereas spoofed
+RF signals, replayed RF signals, and software-injected data are rejected because they lead to spatial, temporal, and physical mismatches, respectively.
+1) Multi-GNSS Parsing and Standardization: The system
+parses raw RINEX files to extract observation epochs, satellite
+pseudoranges, and carrier phases, with a primary focus on
+retrieving the Carrier-to-Noise Density Ratio (C/N0) data
+that characterizes signal strength. StarDial achieves compat-
+ibility with multi-band signals across various constellations,
+including GPS (L1/L5), Beidou (B1I/B1C/B2a), and Galileo
+(E1/E5a). To eliminate inter-system time biases among differ-
+ent constellations, the system maps all observational data onto
+a unified system clock (GPST).
+2) Baseline-based Cleaning: The C/N0 values reported by
+commercial u-blox receivers are typically presented as integers
+(e.g., 35–50 dB-Hz). In an unobstructed static environment,
+owing to the receiver’s internal gain control mechanism, the
+signal generally maintains a highly stable “baseline.” When
+a hand gesture approaches or intersects the satellite Line-of-
+Sight (LoS) path, the signal not only undergoes severe step-like
+degradation but also exhibits distinctive diffraction fluctuations
+as the hand enters the satellite’s Fresnel zone. Leveraging this
+physical characteristic, StarDial introduces a physics-informed
+baseline-based cleaning method. This approach establishes a
+physical baseline by statistically analyzing and extracting the
+background features of each satellite within the observation
+window. Subsequently, the system employs edge-preserving
+denoising logic to filter out transient thermal noise and random
+spikes that fall below a significance threshold. Coupled with
+a sliding window for trend consistency verification, it ensures
+the retention of only the continuous fluctuations induced by
+gesture dynamics.
+B. Diffraction Feature Extraction
+After signal preprocessing, StarDial performs a dedicated
+diffraction feature extraction stage to identify local gesture-
+induced perturbation segments from cleaned multi-satellite
+continuous waveforms. This stage is necessary because the
+C/N0 values reported by commodity GNSS receivers are
+quantized integers, typically within the range of 35–50 dB-
+Hz, and thus have limited resolution. Under continuous ob-
+servation, the waveform of a given satellite may contain
+multiple temporally separated local fluctuations corresponding
+to different gesture actions. To capture such action-related
+responses from continuous data, StarDial explicitly detects and
+characterizes local perturbation segments along the time axis.
+For satellite i, let ˜ci(t) denote its cleaned C/N0 waveform.
+StarDial first detects a set of candidate perturbation segments
+Ei = {ei,1, ei,2, . . . , ei,Mi},
+where each segment ei,m = [t(s)
+i,m, t(e)
+i,m] is a continuous local
+interval in which the waveform exhibits sustained deviation
+from the baseline together with local oscillatory behavior. In
+practice, StarDial searches for short temporal regions where
+baseline departure and local fluctuation co-occur continuously,
+and treats such regions as candidate action segments.
+For each candidate segment ei,m, StarDial extracts three
+diffraction-related features. The first is an amplitude feature
+Ai,m, which measures the strength of local signal deviation
+from the baseline. The second is an oscillation feature Oi,m,
+which captures the prominence of local peak–valley variations
+within the segment. The third is an continuity feature Ci,m,
+which characterizes whether the perturbation remains coherent
+over a short temporal interval and thus preserves an integral
+local structure.
+Based on these features, StarDial computes a diffraction
+saliency score for each segment:
+Si,m = waAi,m + woOi,m + wcCi,m,
+where wa, wo, and wc are the weighting coefficients for the
+amplitude, oscillation, and continuity features, respectively.
+
+
+===== PAGE 6 =====
+A larger Si,m indicates that the segment is more prominent
+in terms of local deviation strength, fluctuation pattern, and
+temporal coherence, and is therefore more likely to correspond
+to an effective gesture-induced perturbation.
+StarDial further assigns each segment a diffraction level ac-
+cording to its saliency score. Segments with stronger saliency
+are labeled as high-confidence perturbation segments, seg-
+ments with moderate saliency are labeled as ordinary candi-
+dates, and segments with weak fluctuations are assigned lower
+levels. The extracted perturbation segment set is represented
+as
+E =
+
+(i, t(s)
+i,m, t(e)
+i,m, Si,m, Li,m)
+	
+,
+where i is the satellite index, t(s)
+i,m and t(e)
+i,m are the start and
+end times of the segment, Si,m is its diffraction saliency score,
+and Li,m is its diffraction level.
+C. Gesture-Plane Geometric Inversion
+This module reconstructs gesture trajectories from the lo-
+cal perturbation segments extracted in the previous stage.
+Instead of directly matching continuous waveforms, StarDial
+formulates trajectory recovery as a geometric inversion prob-
+lem under a time-varying satellite Line-of-Sight (LoS) field,
+conditioned on temporally localized diffraction evidence. The
+central idea is to infer a trajectory on a predefined gesture
+plane whose time-varying geometric interaction best explains
+the extracted perturbation segments across visible satellites.
+1) Event-Conditioned LoS Vector Field: StarDial models
+the sensing space above the receiver as a time-varying Discrete
+LoS Vector Field:
+V(t, p) = {⃗v1(t),⃗v2(t), . . . ,⃗vN(t)},
+(4)
+where N is the number of currently visible satellites, and
+⃗vi(t) ∈R3 is the unit direction vector from the receiver
+position p to the i-th satellite, computed from ephemeris data.
+Since satellite positions evolve continuously and the receiver
+location determines the local viewing geometry, V(t, p) is
+intrinsically a function of both time and space.
+A user gesture is represented as a spatial trajectory T (t) on
+a predefined interaction interval. Based on the output of the
+diffraction feature extraction stage, StarDial first groups tem-
+porally adjacent perturbation segments from multiple satellites
+into a candidate gesture interval
+Wq = [t(s)
+q , t(e)
+q ].
+(5)
+For this interval, the extracted perturbation-event set is defined
+as
+bE(Wq) =
+n
+(i, t(s)
+i,m, t(e)
+i,m, Si,m, Li,m) ∈E
+ [t(s)
+i,m, t(e)
+i,m] ∩Wq ̸= ∅
+o
+.
+(6)
+For each perturbation segment in bE(Wq), StarDial uses
+its temporal support to constrain when the trajectory should
+approach the LoS projection of the corresponding satellite. Let
+Pi(t) denote the projection of the i-th satellite LoS ray onto
+the gesture plane. The segment-conditioned geometric distance
+is defined as
+di,m(T) =
+min
+t∈[t(s)
+i,m,t(e)
+i,m]
+dist(T(t), Pi(t)) .
+(7)
+This quantity measures how closely the candidate trajectory
+approaches the projected contact point of satellite i during the
+temporal extent of the m-th perturbation segment.
+2) Event-Constrained Geometric Inversion: To make the
+inverse problem tractable, StarDial assumes that user gestures
+are performed on a gesture plane Πh at height h above the
+antenna. For each visible satellite, its LoS ray intersects Πh
+at a projected contact point Pi(t), and the set {Pi(t)} forms a
+time-varying contact-point configuration on the gesture plane.
+Let reff denote the effective sensing radius, determined by
+the scale of the first Fresnel zone. For a candidate trajectory
+T(t) within interval Wq, a perturbation segment is geometri-
+cally explainable if
+di,m(T) ≤reff.
+(8)
+To describe the satellites without salient perturbation evi-
+dence in the same interval, StarDial defines the silent-satellite
+set as
+bKmiss(Wq) =
+n
+j
+ ∄(j, t(s)
+j,m, t(e)
+j,m, Sj,m, Lj,m)
+∈bE(Wq)
+o
+.
+(9)
+For each silent satellite j, the interval-wise minimum geomet-
+ric distance is
+dWq
+j
+(T) = min
+t∈Wq dist(T(t), Pj(t)) .
+(10)
+A physically feasible gesture trajectory must satisfy two
+complementary geometric conditions. First, for each extracted
+perturbation segment, the trajectory should enter the effective
+sensing region of the corresponding satellite during that seg-
+ment:
+∀(i, t(s)
+i,m, t(e)
+i,m, Si,m, Li,m) ∈bE(Wq),
+di,m(T) ≤reff.
+(11)
+Second, for all satellites without salient perturbation segments
+in the same interval, the trajectory should remain outside their
+effective sensing regions:
+∀j ∈bKmiss(Wq),
+dWq
+j
+(T) > reff.
+(12)
+These conditions define the feasible trajectory space:
+Ω(Wq) =
+n
+T
+ ∀ei,m ∈bE(Wq), di,m(T) ≤reff,
+∀j ∈bKmiss(Wq), dWq
+j
+(T) > reff
+o
+.
+(13)
+To incorporate the saliency information extracted in the
+previous stage, StarDial assigns each perturbation segment a
+normalized weight
+ωi,m =
+Si,m
+max
+eu,v∈bE(Wq)
+Su,v + ϵ,
+(14)
+
+
+===== PAGE 7 =====
+where ϵ > 0 is a small constant for numerical stability. The
+optimal trajectory is then obtained by
+T ⋆
+q = arg
+min
+T ∈T (Wq) J (T; Wq),
+(15)
+where T (Wq) denotes the candidate trajectory space over
+interval Wq, and the objective function is
+J (T; Wq) =
+X
+ei,m∈bE(Wq)
+ωi,m
+
+di,m(T) −reff
+
++
++ λ
+X
+j∈b
+Kmiss(Wq)
+
+reff −dWq
+j
+(T)
+
++,
+(16)
+with [x]+ = max(x, 0) and λ controlling the balance between
+perturbation-consistency and exclusion consistency.
+This formulation means that StarDial searches for a single
+trajectory that jointly explains the extracted local perturbation
+segments under the current time-varying LoS geometry. When
+the visible satellites provide sufficient angular diversity, the
+feasible solution space contracts toward the true gesture trajec-
+tory, and the recovered path becomes physically interpretable
+under the current spatiotemporal configuration.
+D. Spatiotemporal Consistency Authentication
+This module determines whether the reconstructed trajec-
+tory corresponds to a legitimate user action performed under
+genuine physical interaction. StarDial combines template-level
+gesture discrimination with physical-layer consistency valida-
+tion to make the final authentication decision.
+It is important to emphasize that StarDial does not authen-
+ticate a user solely based on the similarity of a recovered
+gesture shape. Instead, authentication depends on whether the
+reconstructed trajectory within the current candidate interval
+is consistent with the extracted local perturbation segments
+under the instantaneous satellite geometry. Since GNSS con-
+stellations are continuously moving, the satellite azimuths, el-
+evations, and the corresponding LoS projection contact points
+observed by the receiver vary over time. As a result, even if a
+user performs the same gesture, the satellites that generate
+salient perturbation segments and the associated geometric
+constraints on the gesture plane are not identical at different
+time instants. This time-evolving satellite distribution binds
+the authentication result to both the current location and the
+current time, thereby enabling spatiotemporal consistency. The
+same temporal geometric dependency also makes it difficult
+for historically recorded legitimate signals to be successfully
+replayed at a later time.
+1) Trajectory Recovery Accuracy Metrics: The system first
+evaluates the geometric deviation between the reconstructed
+trajectory ˆp and the ground-truth trajectory p. After unified
+resampling, translational alignment, and scale normalization,
+the point-wise Euclidean error at the t-th sampling point is
+defined as et = ∥ˆpt −pt∥2. Based on this error, the Mean
+Trajectory Error (MTE) is computed as MTE =
+1
+T
+PT
+t=1 et,
+and the Root Mean Square Error (RMSE) is computed as
+RMSE =
+q
+1
+T
+PT
+t=1 e2
+t.
+2) Shape Consistency Auxiliary Metric (DTW): In addition
+to direct spatial deviation, the system introduces Dynamic
+Time Warping (DTW) as an auxiliary metric to evaluate the
+overall shape consistency under temporally elastic alignment
+conditions. For the predicted trajectory p = (p1, . . . , pN) and
+the reference trajectory ˆp = (ˆp1, . . . , ˆpM), a point-to-point
+distance matrix Di,j = ∥pi−ˆpj∥2 is first constructed, followed
+by the computation of the cumulative distance matrix C via
+dynamic programming:
+Ci,j = Di,j + min(Ci−1,j, Ci,j−1, Ci−1,j−1).
+The final normalized DTW distance is defined as the average
+cost of the optimal path. In our experimental design, MTE and
+RMSE serve as the primary metrics for spatial accuracy, while
+DTW is utilized to describe the similarity of the trajectories
+at the topological shape level.
+3) Comprehensive Authentication Score: The system inte-
+grates multiple evaluation dimensions into a unified classi-
+fication confidence score. First, the comprehensive distance
+Dk between the reconstructed trajectory and the k-th gesture
+template is calculated:
+Dk = α · DTW + β · RMSE + γ · Φ,
+where Φ represents the structured feature difference term, such
+as direction sequences or turning points. Subsequently, the
+classification confidence score is calculated using a Softmax-
+based normalized exponential function:
+Scorek =
+exp(−Dk)
+P
+j exp(−Dj).
+4) Physical-Layer Security Constraint Validation: To de-
+fend against attackers forging signals with similar shapes,
+StarDial enforces two physical consistency checks on the
+current candidate interval Wq.
+Exclusionary Constraint: Based on the geometric inversion
+result in Section III-C, the reconstructed trajectory must
+avoid the Line-of-Sight projection regions of all satellites in
+bKmiss(Wq), namely those without salient perturbation seg-
+ments in the current interval. If the trajectory conflicts with
+the expected silent-satellite geometry beyond a prescribed
+threshold, the interaction is regarded as physically implausible.
+Segment Temporal Consistency: This check verifies whether
+the temporal support and ordering of the extracted perturbation
+segments in bE(Wq) are consistent with the times at which
+the reconstructed trajectory approaches the corresponding pro-
+jected contact points on the gesture plane. Intuitively, the
+recovered trajectory should explain not only which satellites
+were perturbed, but also when the corresponding perturbation
+segments occurred within the candidate gesture interval.
+The final authentication result is determined by the follow-
+ing joint logic:
+Accept = (y = yauth) ∧(Scorey > τc) ∧(Sphy(Wq) > τp),
+where y is the predicted category, yauth is the user’s registered
+credential, τc and τp are the adaptive thresholds for classifi-
+cation confidence and physical consistency, respectively, and
+
+
+===== PAGE 8 =====
+(a) U-blox F9P.
+(b) Receiver antenna.
+(c) Receiver setup.
+(d) Experimental scene.
+Fig. 5. Hardware prototype and experimental setup of StarDial.
+(a) Effect of gesture-plane height on
+the number of affected satellites per
+grid cell.
+(b) Joint effect of gesture-plane height
+on affected satellites and recovery
+RMSE.
+Fig. 6. Effect of gesture-plane height on contact-map sparsity, the number of
+affected satellites, and trajectory reconstruction error.
+Sphy(Wq) is the physical consistency score computed for the
+current candidate interval. The system issues an authentica-
+tion proof only when the trajectory simultaneously satisfies
+all three requirements: gesture-category agreement, sufficient
+template confidence, and physical-layer consistency.
+IV. EVALUATION
+A. Experimental Setup
+We implemented StarDial on a real GNSS sensing platform
+to evaluate near-field gesture sensing and trajectory recon-
+struction under practical conditions. The platform consists
+of a u-blox F9P multi-band GNSS receiver, an industrial-
+grade “mushroom” antenna, and a laptop with an Intel i5
+processor and 16 GB of RAM for data logging and back-
+end processing. During experiments, the receiver continu-
+ously outputs raw multi-constellation observations, including
+Carrier-to-Noise Ratio (C/N0), pseudorange, carrier phase,
+and satellite geometry. All raw observations were logged at
+25 Hz. Subjects performed predefined 2D gestures within
+a designated interaction area above the antenna, while the
+system synchronously recorded the GNSS observations and
+the corresponding ground-truth trajectories.
+We evaluated StarDial in three representative outdoor envi-
+ronments: an open rooftop, an area between tall buildings,
+and a location near trees. The rooftop provides a clean
+baseline with high sky visibility and limited static occlusion.
+The near-building setting introduces reduced sky visibility,
+stronger reflections, and more severe occlusion. The near-trees
+setting introduces irregular natural blockage caused by foliage
+and branches. Together, these scenarios cover representative
+outdoor propagation conditions for assessing sensing and
+authentication robustness.
+B. Selection of Gesture Plane Height
+We first determine the operating height of the gesture
+plane. To this end, we scan h from 10 cm to 50 cm and
+evaluate both the sparsity of the Geometry Contact Map and
+the reconstruction error. As shown in Fig. 6(a), increasing h
+reduces the average number of satellites mapped to each grid
+cell, indicating a progressively sparser contact map and less
+local geometric aliasing.
+This benefit, however, comes at the cost of reduced ob-
+servational redundancy. Fig. 6(b) shows that the number of
+gesture-affected satellites decreases with h, which weakens
+the multi-satellite constraints required for stable inversion. As
+a result, RMSE exhibits a non-monotonic trend: it is high
+at small h due to dense projection overlap, decreases as the
+contact map becomes better separated, and rises again when
+too few satellites remain perturbed.
+Overall, 30 cm provides the best trade-off between geomet-
+ric separability and observational redundancy. At this height,
+the contact map is sufficiently sparse while the reconstruction
+error remains near its minimum. We therefore adopt 30 cm
+as the default gesture-plane height, consistent with the setting
+used in the system design.
+C. Trajectory Reconstruction and Authentication Performance
+under Legitimate Access
+We next evaluate StarDial under legitimate access, focusing
+on trajectory reconstruction quality and authentication per-
+formance. Reconstruction quality is measured using MTE,
+RMSE, and DTW, while authentication is evaluated through
+template matching combined with physical-layer consistency
+constraints.
+Fig. 7 shows that StarDial reliably preserves the global
+shapes of representative 2D gestures. Reconstruction is most
+accurate for simple single-stroke trajectories and remains
+stable for closed-loop and polyline gestures. The main errors
+occur in trajectories with multiple sharp turns, inflection
+points, or crossing structures, where local deviations become
+more pronounced.
+Simple gestures achieve the lowest RMSE and MTE,
+whereas multi-turn and structurally complex trajectories incur
+
+
+===== PAGE 9 =====
+Fig. 7. Trajectory reconstruction gallery under legitimate access. StarDial preserves the global shapes of representative 2D gesture trajectories, while local
+deviations mainly appear around sharp turns, inflection points, and endpoints in complex gestures.
+larger errors, as shown in Fig. 8(a). The DTW results in
+Fig. 8(b) follow the same pattern, indicating that complex
+gestures are more vulnerable to local distortion caused by non-
+uniform satellite geometry, occlusion redundancy, and discrete
+contact-map projections.
+This discriminability is reflected in the confusion matrix
+in Fig. 9(a), where most classes remain well separated. Mis-
+classifications are concentrated among geometrically similar
+gestures, suggesting that the dominant source of error is local
+reconstruction ambiguity rather than global shape collapse.
+At the authentication level, StarDial achieves strong per-
+formance under legitimate access. As shown in Fig. 9(b), the
+system reaches an Accuracy of 98.66%, a BAC of 98.66%, and
+an F1-score of 92.66% at the operating threshold of 0.218.
+D. Defensive Effectiveness Against Typical Attacks
+We
+evaluate
+StarDial
+against
+three
+representative
+at-
+tacks: SDR generative spoofing, replay attacks, and remote
+ghost/injection attacks. The key security premise is that an
+attacker cannot simultaneously reproduce the true spatial ge-
+ometry and the corresponding physical perturbation pattern at
+a given time and location.
+1) Experimental Construction of SDR Generative Spoofing:
+For SDR spoofing, the attacker transmits forged GNSS-like RF
+signals from a single source or a limited directional cluster. We
+construct two representative datasets: Full-occlusion Forgery,
+where all visible satellites are forced into a hit state, and
+Directional-occlusion Forgery, where only satellites aligned
+with a preset azimuth are marked as occluded. Although
+such attacks can synthesize protocol-compliant bitstreams,
+they cannot reproduce the true multi-directional LoS geometry.
+Consequently, their perturbation patterns collapse to either
+near-uniform states or directionally concentrated structures,
+both of which differ fundamentally from those induced by
+a real gesture. Moreover, reproducing Fresnel-like oscilla-
+tions would require millisecond-level consistency among hand
+motion, intersection geometry, and relative phase, which is
+infeasible under single-source transmission.
+2) Experimental Construction of Replay Attacks: We con-
+sider two replay settings. In Gesture-less Data Replay, the
+attacker replays ordinary historical GNSS observations without
+any gesture-induced perturbation, testing whether a normal
+background sequence can bypass authentication. In Gesture-
+inclusive Data Replay, the attacker replays a complete his-
+torical sequence recorded while a legitimate user performed
+a gesture at time told. Although this second case contains
+genuine diffraction signatures, those signatures remain tied
+to the historical satellite geometry rather than the current
+constellation.
+3) Experimental Construction of Remote Ghost/Injection At-
+tacks: We simulate remote injection by directly forging
+pseudo-observations at the software side, bypassing the phys-
+ical antenna path. Three types are considered: Type A, Pure
+Gaussian White Noise Injection; Type B, Simple Square Wave
+Injection; and Type C, Linear Interpolation Injection. These
+attacks progressively increase waveform realism, but none can
+
+
+===== PAGE 10 =====
+(a) RMSE and MTE bar chart.
+(b) DTW boxplot.
+Fig. 8. Trajectory reconstruction error statistics under legitimate access.
+(a) Confusion matrix.
+(b) Authentication metrics bar chart.
+Fig. 9. Class-level discrimination and authentication metrics under legitimate
+access.
+reproduce the analog signatures of real near-field occlusion,
+including smooth transitions, phase drift, and cooperative
+multi-satellite structure.
+4) Defense Results and Analysis: Fig. 10(a)–(c) shows that
+legitimate samples are well separated from Replay, SDR
+Spoof, and Ghost/Injection samples in the learned feature
+space. Legitimate samples also achieve higher true-class scores
+and smaller distances to the correct templates, indicating
+that StarDial captures attack-relevant discrepancies rather than
+merely waveform appearance.
+Fig. 11 summarizes the final authentication outcomes. At the
+threshold of 0.218, the legitimate TAR is 95.8% with an FRR
+of 4.2%. The attack success rate is 8.3% for Replay and 4.2%
+for both SDR Spoof and Ghost/Injection. The overall EER
+remains 1.34%, showing that StarDial suppresses multiple
+remote forgery attacks while preserving a high legitimate
+acceptance rate.
+(a) Attack-defense boxplot.
+(b) Feature space visualization using
+t-SNE.
+(c) Feature space visualization using
+PCA.
+Fig. 10. Attack-defense analysis and feature-space visualization.
+Fig. 11. Attack-defense rates.
+Replay is slightly harder to reject than the other attacks
+because it contains authentic historical diffraction signatures.
+However, those signatures are no longer consistent with the
+current constellation geometry, and the resulting temporal mis-
+match is exposed during inversion and consistency verification.
+In contrast, SDR spoofing and remote injection lack the spatial
+and analog structure of true sky-distributed propagation and
+are therefore easier to reject.
+Overall, StarDial derives its robustness from joint spa-
+tiotemporal geometric validation and physical-layer authentic-
+ity checking. SDR spoofing fails the spatial consistency test,
+replay fails the temporal consistency test, and ghost/injection
+attacks fail the physical consistency test. Hence, seemingly
+plausible digital observations remain insufficient to satisfy
+StarDial’s triple binding of identity, time, and space.
+E. Performance Comparison Across Outdoor Environments
+Finally, we compare StarDial across the three outdoor envi-
+ronments introduced in Section IV-A: open field, near building,
+
+
+===== PAGE 11 =====
+(a) Near-building confusion matrix.
+(b) Near-trees confusion matrix.
+(c) Authentication metrics across
+environments.
+(d) ROC curves across
+environments.
+Fig. 12. Performance comparison across representative outdoor environments.
+The near-building and near-trees scenarios retain visible diagonal structures
+in the confusion matrices but exhibit stronger off-diagonal confusion than the
+open-field setting. The authentication metrics and ROC curves further show
+that open-field conditions provide the best performance, whereas stronger
+multipath reflections and natural occlusions in near-building and near-trees
+environments lead to degraded discrimination capability and higher error rates.
+and near trees. Fig. 12(a) and Fig. 12(b) show that the near-
+building and near-trees cases retain visible diagonal structures,
+but also exhibit stronger off-diagonal confusion than the clean
+open-field setting. This indicates that multipath and irregular
+blockage mainly affect classes with similar geometric shapes.
+The aggregate metrics in Fig. 12(c) show the same trend.
+The open-field case achieves the best overall performance,
+whereas the near-building and near-trees settings suffer from
+reduced classification confidence and increased error rates due
+to stronger reflections and natural occlusion.
+Fig. 12(d) further presents the ROC curves across environ-
+ments. The open-field scenario yields the strongest separa-
+bility, with an EER of 1.96%, while the near-building and
+near-trees scenarios degrade substantially, reaching EERs of
+17.65% and 18.83%, respectively. This result is consistent with
+the confusion matrices and authentication metrics, confirming
+that environmental propagation complexity directly affects
+StarDial’s discrimination capability.
+Overall, although StarDial performs best under open-field
+conditions, it still retains non-trivial discriminative capability
+in more challenging outdoor environments.
+V. RELATED WORK
+A. GNSS-Based Passive Sensing
+The closest system-level neighbor to StarDial is GPSense,
+which demonstrates that pervasive GPS/GNSS signals can be
+exploited for passive wireless sensing. GPSense reconstructs
+sensing-relevant signal variations from raw measurements re-
+ported by commodity GNSS receivers, develops GPS-specific
+reflection and diffraction models, and leverages multi-satellite
+observations for applications such as activity recognition, pas-
+sive trajectory tracking, and respiration monitoring [?]. This
+line of work is highly relevant because it shows that GNSS
+signals can serve as a viable sensing modality beyond position-
+ing. However, its goal is fundamentally different from ours:
+GPSense is designed for sensing and recognition, whereas
+StarDial is designed for authentication. In particular, StarDial
+does not merely infer motion from GNSS perturbations; it uses
+gesture-induced diffraction as a security primitive to prove
+that a claimed interaction is physically consistent with the
+instantaneous satellite geometry at a specific time and location.
+B. GNSS Anti-Spoofing and Signal Authentication
+A large body of prior work has studied GNSS spoofing
+detection, signal authentication, and secure localization. Exist-
+ing approaches include signal-quality monitoring, navigation-
+message authentication, sensor-fusion-based verification, and
+geometric consistency checks for protecting positioning in-
+tegrity. These methods are effective for determining whether a
+GNSS signal or the resulting location solution is trustworthy,
+but they mainly focus on the authenticity of navigation signals
+and localization outputs. In contrast, StarDial is not merely
+a GNSS anti-spoofing mechanism. Instead, it authenticates
+whether a user’s physical interaction is jointly consistent with
+the current satellite geometry, the receiver’s location, and the
+underlying propagation process. Thus, StarDial complements
+existing GNSS security techniques by introducing a human-
+centered proof of spatiotemporal presence.
+C. Physical-Layer Authentication, Location Verification, and
+Wireless Sensing
+Another related line of work includes physical-layer authen-
+tication, RF fingerprinting, location verification, and wireless
+sensing systems for gesture or behavior recognition. Physical-
+layer authentication typically identifies a transmitter or com-
+munication device from channel characteristics or hardware-
+specific RF signatures, while location-verification systems
+focus on whether a device is at a claimed position. Wireless
+sensing systems, in turn, infer motion or behavior from signal
+perturbations. Although these directions are closely related,
+they usually address only one aspect of the problem: device
+identity, location, or motion sensing. StarDial differs from all
+three by establishing a triple binding among gesture identity,
+physical time, and geographic location. Rather than authen-
+ticating a transmitter or only recognizing a motion pattern,
+StarDial authenticates the physical consistency of the human–
+satellite–receiver interaction under the instantaneous GNSS
+constellation.
+VI. DISCUSSION & LIMITATIONS
+While StarDial demonstrates the feasibility of achieving
+spatiotemporal consistency authentication based on GNSS
+signals, the system still faces several limitations.
+
+
+===== PAGE 12 =====
+Environmental Dependency: The core mechanism of Star-
+Dial is built upon stable GNSS observations and multi-satellite
+visibility; therefore, its applicable scenarios are primarily
+restricted to outdoor or semi-open environments. In indoor
+settings, underground spaces, tunnels, or other scenarios where
+GNSS signals are severely attenuated, the receiver struggles to
+obtain stable raw observational data. Consequently, the system
+cannot reliably perceive the near-field perturbations induced
+by hand gestures. Thus, the current solution is better suited as
+an authentication mechanism for outdoor CPS scenarios rather
+than typical indoor interaction environments.
+Sensitivity to Sky Visibility and Multipath Conditions:
+Even in outdoor environments, the performance of StarDial
+remains susceptible to sky visibility, static occlusions, and
+environmental multipath effects. When the experimental site
+is surrounded by tall buildings, metallic structures, or complex
+reflective surfaces, environmental propagation effects may
+weaken or even mask the local diffraction features induced by
+the gesture itself. This interference subsequently affects tra-
+jectory reconstruction and final authentication results. In other
+words, while the current system achieves stable performance in
+open-sky scenarios, its robustness in environments with poor
+sky visibility or strong multipath interference requires further
+validation and improvement.
+Reliance on Simplified Interaction Geometry Assumptions:
+In the geometric inversion process, the current system adopts
+the assumption of a fixed-height gesture plane, approximating
+the user interaction as a 2D trajectory within a specific hori-
+zontal plane above the antenna. While this design significantly
+reduces inversion complexity and enables real-time recovery,
+it also limits the system’s adaptability to unconstrained 3D
+movements. When a user’s gesture involves significant height
+variations, tilted writing, wrist rotations, or fluctuations in
+body posture, deviations arise between the actual trajectory
+and the model assumptions, thereby affecting reconstruction
+accuracy and authentication stability. Consequently, at this
+stage, StarDial is more suitable for constrained near-field 2D
+interactions and offers limited support for more natural and
+free-form 3D interactions.
+VII. CONCLUSION
+We introduced StarDial, a GNSS-based spatiotemporal
+authentication mechanism that turns gesture-induced signal
+perturbations into proofs of physical presence. By binding user
+interaction to the instantaneous satellite geometry, StarDial
+goes beyond conventional location-agnostic authentication and
+establishes a triple binding among identity, time, and space.
+Through GTD-based modeling, geometric inversion, and
+consistency authentication, StarDial shows that legitimate in-
+teractions can be distinguished from spoofing, replay, and
+ghost injection attacks by their inevitable spatial, temporal,
+or physical mismatches. Experimental results on commodity
+GNSS hardware demonstrate the feasibility of this design in
+real outdoor environments.
+Our results indicate that GNSS can serve not only as a
+positioning infrastructure, but also as a security substrate for
+physically grounded authentication. We hope StarDial will
+inspire future research on leveraging large-scale ambient wire-
+less infrastructures for security primitives that are inherently
+tied to the physical world.
+REFERENCES
+[1] H. Harkat, L. M. Camarinha-Matos, J. Goes, and H. F. T. Ahmed,
+“Cyber-physical systems security: A systematic review,” Computers &
+Industrial Engineering, vol. 188, p. 109891, 2024.
+[2] S. Kim, K.-J. Park, and C. Lu, “A survey on network security for cyber-
+physical systems: From threats to resilient design,” IEEE Communica-
+tions Surveys & Tutorials, vol. 24, no. 3, pp. 1534–1573, 2022.
+[3] A. Humayed, J. Lin, F. Li, and B. Luo, “Cyber-physical systems
+security—a survey,” IEEE Internet of Things Journal, vol. 4, no. 6, pp.
+1802–1831, 2017.
+[4] A. K. Alnaim and A. M. Alwakeel, “Zero trust strategies for cyber-
+physical systems in 6g networks,” Mathematics, vol. 13, no. 7, p. 1108,
+2025.
+[5] G. Cho, S. Kwag, J. H. Huh, B. Kim, C.-H. Lee, and H. Kim,
+“Towards usable and secure location-based smartphone authentication,”
+in Proceedings of the Seventeenth Symposium on Usable Privacy and
+Security (SOUPS), 2021.
+[6] Y. Zeng, J. Cao, J. Hong, S. Zhang, and L. Xie, “Secure localization and
+location verification in wireless sensor networks: a survey,” The Journal
+of Supercomputing, vol. 64, pp. 685–701, 2013.
+[7] L. Meng et al., “A survey of gnss spoofing and anti-spoofing technol-
+ogy,” Remote Sensing, vol. 14, no. 19, p. 4826, 2022.
+[8] D. A. Schmidt, K. Radke, S. A. Camtepe, E. Foo, and M. Ren, “A
+survey and analysis of the gnss spoofing threat and countermeasures,”
+ACM Computing Surveys, vol. 48, no. 4, pp. 64:1–64:36, 2016.
+[9] H. Sathaye, M. Strohmeier, V. Lenders, and A. Ranganathan, “An
+experimental study of gps spoofing and takeover attacks on uavs,” in
+Proceedings of the USENIX Security Symposium, 2022, pp. 3503–3520.
+[10] P. D. Groves, Principles of GNSS, Inertial, and Multisensor Integrated
+Navigation Systems, 2nd ed.
+Artech House, 2013.
+[11] E. D. Kaplan and C. J. Hegarty, Understanding GPS/GNSS: Principles
+and Applications, 3rd ed.
+Artech House, 2017.
+[12] X. Chen et al., “Satellite navigation signal authentication in gnss: A
+survey on technology evolution, status and perspective for bds,” Remote
+Sensing, vol. 15, no. 5, p. 1462, 2023.
+[13] J. B. Keller, “Geometrical theory of diffraction,” Journal of the Optical
+Society of America, vol. 52, no. 2, pp. 116–130, 1962.
+[14] R. G. Kouyoumjian and P. P. H., “A uniform geometrical theory of
+diffraction for an edge in a perfectly conducting surface,” Proceedings
+of the IEEE, vol. 62, no. 11, pp. 1448–1461, 1974.
+[15] S. M. Khalil et al., “Threat modelling for industrial cyber physical
+systems in the era of smart manufacturing,” Computers in Industry, 2022.
+[16] P. Popov, M. Mihailov, L. Dutu, and D. Andrescu, “Enhancing maritime
+navigation: A global navigation satellite system (GNSS) signal quality
+monitoring system for the north-western black sea,” Atmosphere, vol. 16,
+no. 5, p. 500, 2025.
+[17] A. Pinto, Y. Donoso, and J. A. Gutierrez, “Balancing the trilemma:
+a survey of federated anomaly detection for secure cyber-physical
+systems,” Cybersecurity, vol. 9, p. 135, 2026.
+[18] A. A. Jamal et al., “A review on security analysis of cyber physical
+systems using machine learning,” Materials Today: Proceedings, 2023.
+[19] M. Asiri, N. Saxena, R. Gjomemo, and P. Burnap, “Understanding
+indicators of compromise against cyber-attacks in industrial control
+systems: A security perspective,” ACM Transactions on Cyber-Physical
+Systems, vol. 7, no. 1, pp. 15:1–15:33, 2023.
+[20] J. Kong et al., “Threat modeling of cyber-physical systems: A case study
+of a microgrid system,” Computers & Security, 2023.
+[21] R. Canonico, G. Esposito, A. Navarro, S. P. Romano, G. Sperli,
+and A. Vignali, “An anomaly-based approach for cyber-physical threat
+detection using network and sensor data,” Computer Communications,
+vol. 234, p. 108087, 2025.
+[22] R. Canonico, F. Lista, A. Navarro, G. Sperli, and A. Vignali, “Threat de-
+tection in reconfigurable cyber-physical systems through spatio-temporal
+anomaly detection using graph attention network,” Computers & Secu-
+rity, vol. 156, p. 104509, 2025.
+[23] P. Moriano et al., “Adaptive anomaly detection for identifying attacks
+in cyber-physical systems,” Artificial Intelligence Review, 2025.
+
+
+===== PAGE 13 =====
+[24] D. Abshari et al., “A survey of anomaly detection in cyber-physical
+systems,” arXiv preprint arXiv:2502.13256, 2025.
+[25] O. Aslan, S. S. Aktug, M. Ozkan-Okay, A. A. Yilmaz, and E. Akin, “A
+comprehensive review of cyber security vulnerabilities, threats, attacks,
+and solutions,” Electronics, vol. 12, no. 6, p. 1333, 2023.
+[26] S. Rani et al., “A new generation cyber-physical system,” Computers &
+Security, 2025.
+[27] R. Owoputi et al., “Security of multi-agent cyber-physical systems: A
+survey,” IEEE Access, 2022.
+[28] X. Liu, X. Meng, H. Duan, Z. Hu, and M. Wang, “A survey on secure
+wifi sensing technology: Attacks and defenses,” Sensors, vol. 25, no. 6,
+p. 1913, 2025.
+[29] Z. Wang, W. Dou, M. Ma, X. Feng, Z. Huang, C. Zhang, Y. Guo,
+and D. Chen, “A survey of user authentication based on channel state
+information,” Wireless Communications and Mobile Computing, vol.
+2021, pp. 6 636 665:1–6 636 665:16, 2021.
+[30] A. Zilberman, A. Offer, B. Pincu, Y. Glickshtein, R. Kant, O. Brodt,
+A. Otung, R. Puzis, A. Shabtai, and Y. Elovici, “A survey on geolocation
+on the internet,” IEEE Communications Surveys & Tutorials, vol. 27,
+no. 5, pp. 3339–3381, 2025.
+[31] M. Zhang et al., “Feasibility study of location authentication for iot data
+using power grid signatures,” TechRxiv, 2024.
+[32] L. Alhoraibi et al., “Physical layer authentication in wireless networks-
+based machine learning approaches,” Sensors, vol. 23, no. 4, p. 1814,
+2023.
+[33] C. Lu et al., “Overview of satellite nav spoofing and anti-spoofing
+technology,” Frontiers in Physics, vol. 12, p. 1428544, 2024.
+[34] M. Yuan et al., “Authenticating gnss civilian signals: a survey,” Satellite
+Navigation, vol. 4, p. 13, 2023.
+[35] H. Dong, M. Cui, N. Wang, L. Qiu, J. Xiong, and W. Wang, “Gpsense:
+Passive sensing with pervasive gps signals,” in Proceedings of the
+ACM International Conference on Mobile Computing and Networking
+(MobiCom), 2024.
+[36] J. Qiao et al., “A survey of gnss interference monitoring technologies,”
+Frontiers in Physics, vol. 11, p. 1133316, 2023.
+[37] S. Athalye, F. Fotiadis, K. G. Vamvoudakis, and J. Hugues, “An output
+feedback game-theoretic approach for defense against stealthy gnss
+spoofing attacks,” in Proceedings of the American Control Conference
+(ACC), 2024, pp. 3704–3709.
+[38] S. Dasgupta, K. H. Shakib, and M. Rahman, “Experimental validation
+of sensor fusion-based gnss spoofing attack detection framework for
+autonomous vehicles,” arXiv preprint arXiv:2401.01304, 2024.
+[39] Z. Zhou et al., “Clock drift monitoring based gnss spoofing detection
+method for autonomous vehicles,” in Proceedings of the ION GNSS+,
+2024.
+[40] H. Yang, G. Liu, C. Zhao, M. Wen, and Y. Wang, “Real-time gnss spoof-
+ing detection for autonomous vehicles: An attention-based autoencoder
+approach,” in Proceedings of the International Conference on Control,
+Automation, Robotics and Vision, 2024, pp. 232–237.
+[41] J. Zhou et al., “Research on gnss spoofing detection and autonomous
+positioning method for drones operating in mission mode,” Electronics,
+vol. 14, no. 15, p. 3147, 2025.
+[42] B. Niu et al., “Navigation spoofing interference detection based on
+transformer model,” Advances in Space Research, vol. 74, pp. 5156–
+5168, 2024.
+[43] H. Yang et al., “Satellite navigation spoofing interference detection
+and identification based on a six-array spoofing-interference-monitoring
+antenna and an airspace-trapping algorithm,” Sensors, vol. 23, no. 3, p.
+1604, 2023.
+[44] C. Sun, J. W. Cheong, A. G. Dempster, H. Zhao, L. Bai, and W. Feng,
+“Robust spoofing detection for gnss instrumentation using q-channel
+signal quality monitoring metric,” IEEE Transactions on Instrumentation
+and Measurement, vol. 70, p. 8504115, 2021.
+[45] T. Hammarberg, J. M. V. Garcia, J. N. Alanko, and M. Z. H. Bhuiyan,
+“An experimental performance assessment of galileo OSNMA,” Sensors,
+vol. 24, no. 2, p. 404, 2024.
+[46] M. Gotzelmann, E. Koller, I. Viciano-Semper, D. Oskam, E. Gkougkas,
+and J. Simon, “Galileo open service navigation message authentication:
+Preparation phase and drivers for future service provision,” Navigation,
+vol. 70, no. 3, 2023.
+[47] A. Pirsiavash, A. Broumandan, and S. Kennedy, “Galileo open service
+navigation message authentication (OSNMA) benefits, challenges, and
+limitations,” in Proceedings of the 37th International Technical Meeting
+of the Satellite Division of the Institute of Navigation (ION GNSS+),
+2024, pp. 3440–3454.
+[48] A. Rusu-Casandra and E. S. Lohan, “Experimental assessment of
+OSNMA-enabled GNSS positioning in interference-affected RF envi-
+ronments,” Sensors, vol. 25, no. 3, p. 729, 2025.
+[49] Z. Wu et al., “Trustcnav: Certificateless aggregate authentication of civil
+navigation messages for resilient satellite positioning,” Computers &
+Security, 2025.
+[50] A. Noah, “Gnss spoofing and jamming mitigation,” Review manuscript,
+2025.
+[51] L. Chen et al., “Survey of detection techniques for gps spoofing in
+connected vehicle systems,” Informatica, 2025.
+[52] P. Bauer et al., “Effect of gnss spoofing on gnss-imu data fusion-based
+position, velocity and attitude estimation,” IFAC-PapersOnLine, 2025.
+[53] W. Mao, S. Ni, J. Ren, and W. Zhou, “Gnss spoofing detection based on
+q-channel correlation signal quality monitoring,” Measurement, 2026.
+[54] C. Wu et al., “Detection of gnss spoofed signals based on the weighted
+moving average bias correction method,” Scientific Reports, vol. 15,
+2025.
+[55] L. Chen et al., “Gnss spoofing detection based on lightweight features
+and contrastive learning,” GPS Solutions, 2025.
+[56] A. Elango and R. J. Landry, “Xai gnss—a comprehensive study on signal
+quality assessment of gnss disruptions using explainable ai technique,”
+Sensors, vol. 24, no. 24, p. 8039, 2024.
+[57] K. Babic et al., “Gnss spoofing detection based on wavelets and machine
+learning,” Electronics, vol. 14, no. 12, p. 2391, 2025.
+[58] C. Tibaldo et al., “GNSS-WASP: GNSS wide area spoofing,” in Pro-
+ceedings of the USENIX Security Symposium, 2025.
+[59] P. Bohlig et al., “Detection and mitigation of jamming, meaconing, and
+spoofing in GNSS,” in Proceedings of the ION GNSS+, 2025.
+[60] N. Xie, Z. Li, and H.-J. Tan, “A survey of physical-layer authentication in
+wireless communications,” IEEE Communications Surveys & Tutorials,
+vol. 23, no. 1, pp. 282–310, 2021.
+[61] R. Meng, B. Xu, X. Xu, M. Sun, B. Wang, S. Han, S. Lv, and P. Zhang,
+“A survey of machine learning-based physical-layer authentication in
+wireless communications,” Journal of Network and Computer Applica-
+tions, vol. 235, p. 104085, 2025.
+[62] Z. Lai, Z. Chang, M. Sha, Q. Zhang, N. Xie, C. Chen, and D. Niyato, “A
+comprehensive survey on physical layer authentication techniques: Cat-
+egorization and analysis of model-driven and data-driven approaches,”
+ACM Computing Surveys, vol. 57, no. 5, pp. 1–35, 2025.
+[63] J. Xu, D. Wei, and W. Huang, “Polarization fingerprint: A novel
+physical-layer authentication in wireless iot,” in Proceedings of the
+IEEE 23rd International Symposium on a World of Wireless, Mobile
+and Multimedia Networks (WoWMoM), 2022, pp. 434–443.
+[64] X. Li, K. Huang, S. Wang, and X. Xu, “A physical layer authentication
+mechanism for iot devices,” China Communications, 2021.
+[65] E. Illi, A. Pandey, L. Bariah, G. Singh, J.-P. Giacalone, and S. Muhaidat,
+“Physical layer continuous authentication for wireless mesh networks:
+An experimental study,” in Proceedings of MeditCom, 2022, pp. 136–
+141.
+[66] L. Xie et al., “Radio frequency fingerprint identification for internet of
+things,” Security and Safety, vol. 3, p. 2023022, 2024.
+[67] A. Jagannath et al., “A comprehensive survey on radio frequency
+(rf) fingerprinting: Traditional approaches, deep learning, and open
+challenges,” Computer Networks, vol. 219, p. 109455, 2022.
+[68] A. Ahmed et al., “A comprehensive survey on deep learning-based lora
+radio frequency fingerprinting identification,” Sensors, vol. 24, no. 13,
+p. 4411, 2024.
+[69] S. Abbas et al., “Radio frequency fingerprinting techniques for device
+authentication: A survey,” International Journal of Information Security,
+2024.
+[70] J. Wang et al., “A survey on authentication in satellite internet,” Journal
+of Communications and Information Networks, 2022.
+[71] L. Bai, L. Zhu, J. Liu, J. Choi, and W. Zhang, “Physical layer au-
+thentication in wireless communication networks: A survey,” Journal of
+Communications and Information Networks, vol. 5, no. 3, pp. 237–264,
+2020.
+[72] I. Ray, I. Ray, and N. Poolsappasit, “Towards a location-based mandatory
+access control model,” Computers & Security, vol. 25, no. 5, pp. 343–
+358, 2006.

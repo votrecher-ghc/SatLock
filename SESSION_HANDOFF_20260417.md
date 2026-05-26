@@ -1,8 +1,34 @@
 # SatLock 会话交接文档
 
-更新时间：2026-04-17  
+更新时间：2026-05-21 09:15:12 +08:00  
 适用目的：给新会话中的大模型快速接手当前工程状态。  
 重要说明：如果本文件与旧的口头上下文或部分历史实现细节冲突，优先以**本文件描述的当前工程状态**为准。
+
+---
+
+## 0. 2026-05-21 快速接手摘要
+
+当前仓库仍是 **SatLock / StarDial** 项目，不是 `D:\EdgeDownload\PROJECT_CONTEXT.md` 中描述的 LubanCat-3 / RK3576 嵌入式项目。该外部文件内容与本仓库技术主线不一致，本次仅记录这个事实，不把 LubanCat 内容并入 SatLock 主线。
+
+当前项目定位：
+
+- SatLock 是基于 GNSS C/N0 或 SNR 近场衍射扰动的手势感知、轨迹恢复、认证与安全分析研究原型。
+- 论文初稿为 `D:\Matproject\SatLock\StarDial.pdf`，已抽取文本 `D:\Matproject\SatLock\StarDial_extracted.txt`。
+- 系统设计理论示意图单独放在 `D:\Matproject\SatLock\system_polt`，该目录与原始数据工作流解耦，主要服务论文 `III. SYSTEM DESIGN`。
+- 当前最重要的代码出口仍是 `D:\Matproject\SatLock\gesture_analysis\scientific_graphing\export_paper_figures_data_driven.m`。
+- 最新已验证论文图导出目录为：
+  `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260520_094905`
+
+最近一轮主要工作集中在论文图格式精修：
+
+- 全局论文图字体统一为 Arial。
+- 多数主论文图采用大字号风格，重点图要求坐标轴外框完整、坐标轴线宽约 1.0、刻度朝内。
+- `authentication_metrics_bar` 的纵轴数字已改为手绘小号刻度，最近固定到 40 号；柱状图上方不显示数值。
+- `feature_space_pca` 和 `feature_space_tsne` 的散点面积已放大到至少旧版 2 倍，并保持类别中心不乱移。
+- `traj_gallery_data_driven` 已改为手动 axes 网格，列间距按固定子图宽度后压缩，行间距恢复，避免上下行误压。
+- `B1/B2/B3/C1/C2` 等系统设计图此前已做过大量版式调整，PDF/PNG 白边、尺寸一致性和 Arial 字体是核心约束。
+
+本文件的后续章节保留了 2026-04-17 的架构背景与设计决策；若与本节最新图形状态冲突，以本节和最新导出目录为准。
 
 ---
 
@@ -273,6 +299,21 @@ cfg.auth_cfg.weights = struct('alpha_dtw', 2.5, 'beta_rmse', 0.30, 'gamma_shape'
 
 这个脚本是整个项目现在最重要的“结果出口”之一。
 
+补充：论文 `III. SYSTEM DESIGN` 的理论示意图不属于原始数据工作流，当前单独放在：
+
+- `D:\Matproject\SatLock\system_polt`
+
+该目录主要用于绘制系统设计讲解图，例如：
+
+- `A_signal_preprocessing`
+- `B1_diffraction_waveforms`
+- `B2_diffraction_feature_values`
+- `B3_diffraction_saliency_scores`
+- `C1_gesture_plane_geometric_inversion`
+- `C2_geometric_constraint_rows`
+
+这组图是论文原理示意图，优先满足视觉解释、字体、尺寸、白边和 PDF/PNG 一致性，不要强行接入 `gesture_test.m` 的主数据流程。
+
 ### 8.1 核心原则
 
 - 只针对 **Data-Driven** 方法出图
@@ -291,7 +332,7 @@ cfg.auth_cfg.weights = struct('alpha_dtw', 2.5, 'beta_rmse', 0.30, 'gamma_shape'
 
 例如最新一次导出目录：
 
-- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260417_180038`
+- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260520_094905`
 
 用户非常在意“结果目录”和“临时调试内容”分离，不要往结果目录里混放无关测试图。
 
@@ -430,6 +471,8 @@ cfg.auth_cfg.weights = struct('alpha_dtw', 2.5, 'beta_rmse', 0.30, 'gamma_shape'
 
 这是最近一次会话最关键的收尾点，必须记住。
 
+2026-05-21 更新：在保持类别中心和展示层规整逻辑不变的前提下，`feature_space_pca` 与 `feature_space_tsne` 的散点面积已经放大到至少旧版 2 倍。后续如果用户只要求“点再大/再小”，优先只改 `plot_embedding_common` 里的 `marker_size`，不要改 `regularize_embedding_layout` 或类别中心布局逻辑。
+
 ### 10.1 用户最终要求
 
 用户最后明确要求：
@@ -469,7 +512,7 @@ cfg.auth_cfg.weights = struct('alpha_dtw', 2.5, 'beta_rmse', 0.30, 'gamma_shape'
 
 这次修改后的最新已验证结果：
 
-- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260417_180038`
+- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260520_094905`
 
 对应图片：
 
@@ -622,7 +665,7 @@ matlab -batch "addpath(genpath('D:/Matproject/SatLock/gesture_analysis')); sourc
 
 ### 14.3 最近一次已验证导出目录
 
-- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260417_180038`
+- `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260520_094905`
 
 ---
 
@@ -685,11 +728,11 @@ matlab -batch "addpath(genpath('D:/Matproject/SatLock/gesture_analysis')); sourc
 
 截至本文件写入时：
 
-- 新建交接文档前的最后一次代码修改，是 `PCA / t-SNE` 的展示层布局规整；
-- 目标是“不同类点不交叉，同时点簇中心不改变”；
-- 已完成，并重新完整导出结果；
+- 最近一次已完成并验证的代码修改，是把 `feature_space_pca` / `feature_space_tsne` 的散点面积放大到至少旧版 2 倍；
+- 此前已经完成 `authentication_metrics_bar` 纵轴数字固定为 40 号、`traj_gallery_data_driven` 手动网格列间距修正、主论文图 Arial 字体与大字号风格统一；
+- 上述改动已完整重新导出结果；
 - 最新验证目录：
-  `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260417_180038`
+  `D:\Matproject\SatLock\gesture_analysis\results\paper_figures_data_driven_output\paper_figures_data_driven_20260520_094905`
 
-如果新会话开始后，用户首先提到 `feature_space_pca` / `feature_space_tsne`，优先以这个目录中的图作为当前基线。
+如果新会话开始后，用户首先提到 `feature_space_pca` / `feature_space_tsne`、`authentication_metrics_bar` 或 `traj_gallery_data_driven`，优先以这个目录中的图作为当前基线。
 

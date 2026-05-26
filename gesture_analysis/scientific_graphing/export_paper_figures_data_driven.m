@@ -29,6 +29,7 @@ if ~isempty(source_mat) && exist(source_mat, 'file') == 2
 end
 cfg = absorb_source_cfg(cfg, source_cfg);
 cfg = merge_cfg(cfg, user_cfg);
+apply_global_figure_defaults_local(cfg);
 
 rng(cfg.random_seed, 'twister');
 
@@ -81,7 +82,7 @@ plot_error_cdf(metric_cdf_tbl, cdf_path, cfg);
 manifest(end + 1, :) = {'cdf_rmse_mte', 'cdf_rmse_mte.png', cdf_path}; %#ok<AGROW>
 
 gallery_path = figure_png_path(out_dir, 'traj_gallery_data_driven.png');
-plot_single_method_gallery(method_cases, template_order, gallery_path, cfg);
+plot_single_method_gallery(method_cases, template_order, gallery_path, cfg, 22);
 manifest(end + 1, :) = {'traj_gallery_data_driven', 'traj_gallery_data_driven.png', gallery_path}; %#ok<AGROW>
 
 if cfg.auth_perf.enable
@@ -362,11 +363,29 @@ cfg.scenario_confusion.cache_prefix = 'scenario_confusion_auth_';
 cfg.style = build_style();
 end
 
+function apply_global_figure_defaults_local(cfg)
+font_name = cfg.style.font_name;
+font_size = cfg.style.font_size;
+try
+    set(groot, ...
+        'DefaultAxesFontName', font_name, ...
+        'DefaultTextFontName', font_name, ...
+        'DefaultLegendFontName', font_name, ...
+        'DefaultColorbarFontName', font_name, ...
+        'DefaultAxesFontSize', font_size, ...
+        'DefaultTextFontSize', font_size, ...
+        'DefaultLegendFontSize', font_size, ...
+        'DefaultColorbarFontSize', font_size);
+catch
+end
+end
+
 function style = build_style()
 style = struct();
-style.font_name = 'Times New Roman';
-style.font_size = 10.5;
-style.small_font_size = 8.5;
+style.font_name = 'Arial';
+style.font_size = 30;
+style.small_font_size = 22;
+style.heatmap_value_font_size = 8.5;
 style.axis_line_width = 1.0;
 style.line_width = 1.9;
 style.marker_size = 6.5;
@@ -1287,6 +1306,7 @@ end
 
 function plot_rmse_mte_bar(sample_tbl, method_cases, template_order, out_path, cfg)
 ordered_cases = order_cases(method_cases, template_order);
+[tick_fs, label_fs] = compact_paper_font_sizes_local();
 rmse_vals = nan(numel(template_order), 1);
 mte_vals = nan(numel(template_order), 1);
 for i = 1:numel(template_order)
@@ -1331,13 +1351,16 @@ xticklabels(ax, x_labels);
 xtickangle(ax, 28);
 ylabel(ax, 'Error (cm)');
 xlabel(ax, 'Gesture category');
-legend(ax, {'RMSE', 'MTE'}, 'Location', 'northwest', 'Box', 'on');
+lgd = legend(ax, {'RMSE', 'MTE'}, 'Location', 'northwest', 'Box', 'on');
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+apply_fixed_legend_font_size_local(lgd, cfg, max(1, round((tick_fs - 2) * 0.75)));
 
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
 function plot_dtw_box(sample_tbl, method_cases, template_order, out_path, cfg)
 ordered_cases = order_cases(method_cases, template_order);
+[tick_fs, label_fs] = compact_paper_font_sizes_local();
 f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 100, 1380, 620]);
 ax = axes(f);
 hold(ax, 'on');
@@ -1389,6 +1412,7 @@ xlabel(ax, 'Gesture category');
 ylabel(ax, 'DTW distance (cm)');
 yticks(ax, 0:3:15);
 ylim(ax, [0, 15]);
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
@@ -1459,10 +1483,17 @@ z = (x - mu) / sigma;
 z(~finite_mask) = inf;
 end
 
-function plot_single_method_gallery(method_cases, template_order, out_path, cfg)
+function plot_single_method_gallery(method_cases, template_order, out_path, cfg, gallery_font_size)
 ordered_cases = order_cases(method_cases, template_order);
 if isempty(ordered_cases)
     return;
+end
+
+if nargin < 5 || isempty(gallery_font_size)
+    [tick_fs, label_fs] = paper_font_sizes_local();
+else
+    tick_fs = gallery_font_size;
+    label_fs = gallery_font_size;
 end
 
 n_case = numel(ordered_cases);
@@ -1474,14 +1505,24 @@ x_lim = 100 * x_lim;
 y_lim = 100 * y_lim;
 
 f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', ...
-    'Position', [60, 50, 1600, max(800, 290 * n_row)]);
-tl = tiledlayout(f, n_row, n_col, 'TileSpacing', 'compact', 'Padding', 'compact');
-try
-    tl.Position = [0.045, 0.12, 0.93, 0.84];
-catch
-end
+    'Position', [50, 40, 1920, max(1120, 375 * n_row)]);
+grid_left = 0.060;
+grid_bottom = 0.165;
+grid_width = 0.885;
+grid_height = 0.775;
+col_gap = 0.003;
+row_gap = 0.105;
+base_col_gap = 0.070;
+tile_w = (grid_width - base_col_gap * (n_col - 1)) / n_col;
+tile_h = (grid_height - row_gap * (n_row - 1)) / n_row;
+used_grid_width = tile_w * n_col + col_gap * (n_col - 1);
+grid_left_effective = grid_left + max(0, (grid_width - used_grid_width) / 2);
 for i = 1:n_case
-    ax = nexttile(tl);
+    row_idx = floor((i - 1) / n_col) + 1;
+    col_idx = mod(i - 1, n_col) + 1;
+    ax_x = grid_left_effective + (col_idx - 1) * (tile_w + col_gap);
+    ax_y = grid_bottom + (n_row - row_idx) * (tile_h + row_gap);
+    ax = axes('Parent', f, 'Position', [ax_x, ax_y, tile_w, tile_h]);
     hold(ax, 'on');
     apply_axes_style(ax, cfg);
     axis(ax, 'equal');
@@ -1514,13 +1555,14 @@ for i = 1:n_case
     xlim(ax, x_lim);
     ylim(ax, y_lim);
     title(ax, pretty_template_label(ordered_cases(i).template), 'Interpreter', 'none', ...
-        'FontName', cfg.style.font_name, 'FontSize', cfg.style.font_size);
+        'FontName', cfg.style.font_name, 'FontSize', label_fs);
     xlabel(ax, 'East (cm)');
     ylabel(ax, 'North (cm)');
+    apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
 
 end
 
-legend_ax = axes('Parent', f, 'Position', [0.16, 0.010, 0.68, 0.042], ...
+legend_ax = axes('Parent', f, 'Position', [0.070, 0.020, 0.860, 0.075], ...
     'Visible', 'off', 'XColor', 'none', 'YColor', 'none');
 hold(legend_ax, 'on');
 lg1 = plot(legend_ax, NaN, NaN, '-', 'Color', cfg.style.gt_color, 'LineWidth', 2.4);
@@ -1532,16 +1574,15 @@ lg4 = plot(legend_ax, NaN, NaN, 's', 'Color', [0.22 0.22 0.22], ...
 lgd = legend(legend_ax, [lg1, lg2, lg3, lg4], ...
     {'Ground truth', 'Recovered trajectory', 'Gesture Start', 'Gesture End'}, ...
     'Orientation', 'horizontal', 'Location', 'north', 'Box', 'on', 'NumColumns', 4);
-lgd.FontName = cfg.style.font_name;
-lgd.FontSize = max(11, cfg.style.font_size + 0.6);
+apply_fixed_legend_font_size_local(lgd, cfg, tick_fs);
 if isprop(lgd, 'ItemTokenSize')
-    lgd.ItemTokenSize = [12, 8];
+    lgd.ItemTokenSize = [20, 12];
 end
 drawnow;
 lgd.Units = 'normalized';
 lgd_pos = lgd.Position;
 lgd_pos(1) = 0.5 - lgd_pos(3) / 2;
-lgd_pos(2) = 0.011;
+lgd_pos(2) = 0.020;
 lgd.Position = lgd_pos;
 
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
@@ -2081,7 +2122,7 @@ emb = build_embedding_feature_bundle(sec_data, cfg);
 z = normalize_feature_matrix(emb.features);
 [~, score, ~, ~] = pca(z);
 coords = score(:, 1:2);
-coords = regularize_embedding_layout(coords, emb.labels);
+coords = regularize_embedding_layout(coords, emb.labels, 'pca');
 plot_embedding_common(coords, emb.labels, {'PC 1', 'PC 2'}, out_path, cfg);
 end
 
@@ -2091,19 +2132,23 @@ z = normalize_feature_matrix(emb.features);
 perplexity = max(1, floor((size(z, 1) - 1) / 3));
 perplexity = min([cfg.security.tsne_perplexity, perplexity, size(z, 1) - 1]);
 coords = tsne(z, 'NumDimensions', 2, 'Perplexity', perplexity, 'Standardize', false);
-coords = regularize_embedding_layout(coords, emb.labels);
+coords = regularize_embedding_layout(coords, emb.labels, 'tsne');
 plot_embedding_common(coords, emb.labels, {'Dimension 1', 'Dimension 2'}, out_path, cfg);
 end
 
 function plot_embedding_common(coords, labels, axis_labels, out_path, cfg)
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 100, 980, 720]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+[tick_fs, label_fs] = enlarged_paper_font_sizes_local();
+[legend_fs, tick_fs, label_fs] = embedding_font_sizes_for_output_local(out_path, tick_fs, label_fs);
+ax.Position = paper_axes_position_local('scatter_large');
 
 class_order = security_class_order_local();
 legend_handles = gobjects(0);
 legend_labels = {};
+marker_size = max(56, round(1.72 * cfg.style.scatter_size));
 for i = 1:numel(class_order)
     name = class_order{i};
     mask = labels == string(name);
@@ -2111,12 +2156,12 @@ for i = 1:numel(class_order)
         continue;
     end
     color_rgb = cfg.style.attack_colors(name);
-    h = scatter(ax, coords(mask, 1), coords(mask, 2), cfg.style.scatter_size, ...
-        'MarkerFaceColor', color_rgb, 'MarkerEdgeColor', [0.15 0.15 0.15], ...
-        'LineWidth', 0.5);
+    h = scatter(ax, coords(mask, 1), coords(mask, 2), marker_size, ...
+        'MarkerFaceColor', color_rgb, 'MarkerEdgeColor', [1 1 1], ...
+        'LineWidth', 0.55);
     try
-        h.MarkerFaceAlpha = 0.65;
-        h.MarkerEdgeAlpha = 0.45;
+        h.MarkerFaceAlpha = 0.78;
+        h.MarkerEdgeAlpha = 0.62;
     catch
     end
     legend_handles(end + 1) = h; %#ok<AGROW>
@@ -2125,8 +2170,26 @@ end
 
 xlabel(ax, axis_labels{1});
 ylabel(ax, axis_labels{2});
-legend(ax, legend_handles, legend_labels, 'Location', 'northeast', 'Box', 'on');
+lgd = legend(ax, legend_handles, legend_labels, 'Location', 'northwest', 'Box', 'on');
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+apply_fixed_legend_font_size_local(lgd, cfg, legend_fs);
+place_legend_top_left_local(lgd, ax, cfg, 0.018, 0.042);
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+end
+
+function [legend_fs, tick_fs, label_fs] = embedding_font_sizes_for_output_local(out_path, default_tick_fs, default_label_fs)
+tick_fs = default_tick_fs;
+label_fs = default_label_fs;
+legend_fs = default_label_fs;
+[~, base_name] = fileparts(out_path);
+if strcmp(char(string(base_name)), 'feature_space_tsne')
+    tick_fs = max(1, default_tick_fs - 2);
+    label_fs = max(1, default_label_fs - 2);
+    legend_fs = max(1, default_label_fs - 4);
+end
+label_fs = label_fs + 4;
+legend_fs = max(1, legend_fs - 4);
+legend_fs = max(1, round(legend_fs * 2 / 3));
 end
 
 function plot_attack_defense_boxplot(sec_data, out_path, cfg)
@@ -2143,6 +2206,7 @@ end
 class_order = security_class_order_local();
 f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [110, 100, 1180, 560]);
 tiled = tiledlayout(f, 1, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+[tick_fs, label_fs] = compact_paper_font_sizes_local();
 
 metric_specs = { ...
     'true_label_score', 'Score of true class'; ...
@@ -2175,6 +2239,7 @@ for m = 1:size(metric_specs, 1)
     xtickangle(ax, 24);
     xlabel(ax, 'Sample class');
     ylabel(ax, metric_specs{m, 2});
+    apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
 end
 
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
@@ -2251,7 +2316,7 @@ for r = 1:size(display_mat, 1)
     display_mat(r, :) = round_score_row_for_display_local(display_mat(r, :), 2);
 end
 
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [110, 90, 920, 760]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 imagesc(ax, score_mat);
 apply_axes_style(ax, cfg);
@@ -2259,16 +2324,17 @@ axis(ax, 'image');
 colormap(ax, soft_confusion_colormap(256));
 cb = colorbar(ax);
 cb.Label.String = char(string(colorbar_label));
-cb.FontName = cfg.style.font_name;
-cb.FontSize = cfg.style.font_size;
+apply_paper_colorbar_style(cb, cfg);
 
 xticks(ax, 1:numel(template_order));
 yticks(ax, 1:numel(template_order));
 xticklabels(ax, class_names);
 yticklabels(ax, class_names);
-xtickangle(ax, 35);
+xtickangle(ax, 55);
 xlabel(ax, 'Predicted class');
 ylabel(ax, 'True class');
+apply_confusion_matrix_axes_style_local(ax, cfg);
+apply_tight_heatmap_layout_local(ax, cb);
 
 for r = 1:size(score_mat, 1)
     for c = 1:size(score_mat, 2)
@@ -2281,7 +2347,7 @@ for r = 1:size(score_mat, 1)
         end
         text(ax, c, r, sprintf('%.2f', disp_val), ...
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
+            'FontName', cfg.style.font_name, 'FontSize', cfg.style.heatmap_value_font_size, ...
             'Color', txt_color);
     end
 end
@@ -2342,9 +2408,11 @@ xticks(ax, 1:n_class);
 yticks(ax, 1:n_class);
 xticklabels(ax, class_names);
 yticklabels(ax, class_names);
-xtickangle(ax, 35);
+xtickangle(ax, 55);
 xlabel(ax, 'Predicted class');
 ylabel(ax, 'True class');
+apply_confusion_matrix_axes_style_local(ax, cfg);
+apply_tight_heatmap_layout_local(ax, cb);
 
 for r = 1:size(conf_mat, 1)
     for c = 1:size(conf_mat, 2)
@@ -2357,7 +2425,7 @@ for r = 1:size(conf_mat, 1)
         end
         text(ax, c, r, sprintf('%.2f', disp_val), ...
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
+            'FontName', cfg.style.font_name, 'FontSize', cfg.style.heatmap_value_font_size, ...
             'Color', txt_color);
     end
 end
@@ -2477,9 +2545,11 @@ xticks(ax, 1:numel(template_order));
 yticks(ax, 1:numel(template_order));
 xticklabels(ax, class_names);
 yticklabels(ax, class_names);
-xtickangle(ax, 35);
+xtickangle(ax, 55);
 xlabel(ax, 'Predicted class');
 ylabel(ax, 'True class');
+apply_confusion_matrix_axes_style_local(ax, cfg);
+apply_tight_heatmap_layout_local(ax, cb);
 
 for r = 1:size(score_mat, 1)
     for c = 1:size(score_mat, 2)
@@ -2492,7 +2562,7 @@ for r = 1:size(score_mat, 1)
         end
         text(ax, c, r, sprintf('%.2f', disp_val), ...
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
+            'FontName', cfg.style.font_name, 'FontSize', cfg.style.heatmap_value_font_size, ...
             'Color', txt_color);
     end
 end
@@ -2578,10 +2648,13 @@ metric_res = auth_perf.metrics;
 vals = 100 * [metric_res.accuracy, metric_res.balanced_accuracy, metric_res.f1_score];
 labels = {'Accuracy', 'BAC', 'F1-score'};
 
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [170, 110, 860, 620]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+tick_fs = confusion_axis_label_font_size_local();
+label_fs = confusion_axis_label_font_size_local();
+ax.Position = paper_axes_position_local('bar_auth_huge');
 ax.XGrid = 'off';
 ax.YGrid = 'on';
 ax.Layer = 'bottom';
@@ -2595,34 +2668,57 @@ xticks(ax, 1:numel(labels));
 xticklabels(ax, labels);
 ylabel(ax, 'Score (%)');
 xlim(ax, [0.45, numel(labels) + 0.55]);
-ylim(ax, [0, min(105, max(100, ceil(max(vals) / 5) * 5 + 5))]);
+ylim(ax, [0, 114]);
 yticks(ax, 0:10:100);
 
-for i = 1:numel(vals)
-    text(ax, i, min(vals(i) + 2.2, ax.YLim(2) - 2.5), sprintf('%.2f', vals(i)), ...
-        'HorizontalAlignment', 'center', ...
-        'VerticalAlignment', 'bottom', ...
-        'FontName', cfg.style.font_name, ...
-        'FontSize', cfg.style.small_font_size, ...
-        'Color', [0.20 0.20 0.20]);
+apply_fixed_axes_font_size_local(ax, cfg, label_fs, label_fs);
+ax.XAxis.FontSize = label_fs;
+manual_y_tick_labels_local(ax, cfg, 40, 0.018);
+ax.YAxis.FontSize = 40;
+ax.YAxis.FontName = cfg.style.font_name;
+move_ylabel_left_safely_local(ax, -0.135);
+save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
-save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+function manual_y_tick_labels_local(ax, cfg, font_size, x_offset_frac)
+if isempty(ax) || ~isgraphics(ax)
+    return;
+end
+if nargin < 4 || isempty(x_offset_frac)
+    x_offset_frac = 0.045;
+end
+
+y_ticks = ax.YTick;
+yticklabels(ax, repmat({''}, size(y_ticks)));
+xl = ax.XLim;
+x_pos = xl(1) - x_offset_frac * diff(xl);
+for i = 1:numel(y_ticks)
+    text(ax, x_pos, y_ticks(i), sprintf('%g', y_ticks(i)), ...
+        'HorizontalAlignment', 'right', ...
+        'VerticalAlignment', 'middle', ...
+        'FontName', cfg.style.font_name, ...
+        'FontSize', font_size, ...
+        'Color', ax.YColor, ...
+        'Clipping', 'off', ...
+        'HandleVisibility', 'off');
+end
 end
 
 function plot_scenario_authentication_roc(scenario_eval, out_path, cfg)
 if ~isfield(scenario_eval, 'records') || isempty(scenario_eval.records)
     return;
 end
+[tick_fs, label_fs, legend_fs, ~] = scenario_auth_font_sizes_local();
 
 scene_colors = containers.Map( ...
     {'Open field', 'Near building', 'Near trees'}, ...
     {[0.15 0.41 0.74], [0.78 0.42 0.18], [0.28 0.56 0.25]});
 
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [160, 95, 780, 760]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+ax.Position = paper_axes_position_local('roc_large_text');
 
 plot(ax, [0 1], [0 1], '--', 'Color', [0.74 0.74 0.74], 'LineWidth', 1.1, 'DisplayName', 'Chance');
 for i = 1:numel(scenario_eval.records)
@@ -2644,7 +2740,10 @@ ylim(ax, [-0.03, 1.03]);
 xticks(ax, 0:0.1:1);
 yticks(ax, 0:0.1:1);
 axis(ax, 'square');
-legend(ax, 'Location', 'southeast', 'Box', 'on');
+ax.Position = paper_axes_position_local('roc_large_text');
+lgd = legend(ax, 'Location', 'southeast', 'Box', 'on');
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+apply_fixed_legend_font_size_local(lgd, cfg, legend_fs);
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
@@ -2656,11 +2755,13 @@ end
 tbl = scenario_eval.summary_tbl;
 labels = cellstr(tbl.scenario_label);
 vals = 100 * [tbl.accuracy, tbl.balanced_accuracy, tbl.f1_score, tbl.eer];
+[tick_fs, label_fs, legend_fs, x_label_fs] = scenario_auth_font_sizes_local();
 
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [170, 110, 980, 640]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+ax.Position = paper_axes_position_local('scenario_bar_large_text');
 ax.Layer = 'bottom';
 grid(ax, 'on');
 
@@ -2674,28 +2775,91 @@ for i = 1:numel(b)
 end
 
 xticks(ax, 1:numel(labels));
-xticklabels(ax, labels);
-xtickangle(ax, 12);
+xticklabels(ax, repmat({''}, size(labels)));
+xtickangle(ax, 0);
 ylabel(ax, 'Score (%)');
 xlim(ax, [0.45, numel(labels) + 0.55]);
 ylim(ax, [0, 105]);
 yticks(ax, 0:10:100);
-legend(ax, {'Accuracy', 'BAC', 'F1-score', 'EER'}, 'Location', 'northeast', 'Box', 'on');
+lgd = legend(ax, {'Accuracy', 'BAC', 'F1-score', 'EER'}, 'Location', 'northeast', 'Box', 'on');
 
-for i = 1:size(vals, 1)
-    for j = 1:size(vals, 2)
-        x = b(j).XEndPoints(i);
-        y = vals(i, j);
-        text(ax, x, min(y + 1.8, 101.5), sprintf('%.1f', y), ...
-            'HorizontalAlignment', 'center', ...
-            'VerticalAlignment', 'bottom', ...
-            'FontName', cfg.style.font_name, ...
-            'FontSize', cfg.style.small_font_size, ...
-            'Color', [0.20 0.20 0.20]);
-    end
+apply_fixed_axes_font_size_local(ax, cfg, label_fs, label_fs);
+manual_y_tick_labels_local(ax, cfg, tick_fs, 0.020);
+manual_x_tick_labels_multiline_local(ax, cfg, labels, x_label_fs);
+move_ylabel_left_safely_local(ax, -0.080);
+apply_fixed_legend_font_size_local(lgd, cfg, legend_fs);
+place_legend_consistently(lgd, ax, cfg, 0.014, 0.036);
+save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
-save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+function [tick_fs, label_fs, legend_fs, x_label_fs] = scenario_auth_font_sizes_local()
+tick_fs = 27;
+label_fs = 50;
+legend_fs = 23;
+x_label_fs = 34;
+end
+
+function manual_x_tick_labels_multiline_local(ax, cfg, labels, font_size)
+if isempty(ax) || ~isgraphics(ax)
+    return;
+end
+
+yl = ax.YLim;
+y_range = diff(yl);
+y_top = yl(1) - 0.025 * y_range;
+y_bottom = yl(1) - 0.095 * y_range;
+for i = 1:numel(labels)
+    switch char(string(labels{i}))
+        case 'Open field'
+            line1 = 'Open';
+            line2 = 'field';
+        case 'Near building'
+            line1 = 'Near';
+            line2 = 'building';
+        case 'Near trees'
+            line1 = 'Near';
+            line2 = 'trees';
+        otherwise
+            parts = split(string(labels{i}));
+            if numel(parts) >= 2
+                line1 = char(parts(1));
+                line2 = char(strjoin(parts(2:end), ' '));
+            else
+                line1 = char(string(labels{i}));
+                line2 = '';
+            end
+    end
+    text(ax, i, y_top, line1, ...
+        'HorizontalAlignment', 'center', ...
+        'VerticalAlignment', 'top', ...
+        'FontName', cfg.style.font_name, ...
+        'FontSize', font_size, ...
+        'Color', ax.XColor, ...
+        'Clipping', 'off', ...
+        'HandleVisibility', 'off');
+    if ~isempty(line2)
+        text(ax, i, y_bottom, line2, ...
+            'HorizontalAlignment', 'center', ...
+            'VerticalAlignment', 'top', ...
+            'FontName', cfg.style.font_name, ...
+            'FontSize', font_size, ...
+            'Color', ax.XColor, ...
+            'Clipping', 'off', ...
+            'HandleVisibility', 'off');
+    end
+end
+end
+
+function move_ylabel_left_safely_local(ax, x_norm)
+if isempty(ax) || ~isgraphics(ax) || ~isgraphics(ax.YLabel)
+    return;
+end
+try
+    ax.YLabel.Units = 'normalized';
+    ax.YLabel.Position(1) = x_norm;
+    ax.YLabel.Position(2) = 0.5;
+catch
+end
 end
 
 function [zoom_x, zoom_y] = resolve_auth_roc_zoom_window_local(roc_res)
@@ -2788,10 +2952,12 @@ for i = 1:numel(attack_order)
 end
 
 bar_data = 100 * [[tar; asr(:)], [frr; far(:)]];
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [140, 100, 980, 660]);
+attack_font_size = cfg.style.font_size + 6;
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+ax.Position = paper_axes_position_local('bar_attack_rates');
 ax.Layer = 'bottom';
 grid(ax, 'on');
 
@@ -2809,21 +2975,11 @@ ylabel(ax, 'Rate (%)');
 xlim(ax, [0.45, numel(group_labels) + 0.55]);
 ylim(ax, [0, 105]);
 yticks(ax, 0:10:100);
-legend(ax, {'Success metric (TAR / ASR)', 'Error metric (FRR / FAR)'}, 'Location', 'northwest', 'Box', 'on');
+lgd = legend(ax, {'Success metric (TAR / ASR)', 'Error metric (FRR / FAR)'}, 'Location', 'northeast', 'Box', 'on');
 
-for i = 1:numel(group_labels)
-    if isfinite(bar_data(i, 1))
-        text(ax, i - 0.15, min(bar_data(i, 1) + 2.0, 101.5), sprintf('%.1f', bar_data(i, 1)), ...
-            'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, 'Color', [0.20 0.20 0.20]);
-    end
-    if isfinite(bar_data(i, 2))
-        text(ax, i + 0.15, min(bar_data(i, 2) + 2.0, 101.5), sprintf('%.1f', bar_data(i, 2)), ...
-            'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, 'Color', [0.20 0.20 0.20]);
-    end
-end
-
+apply_fixed_axes_font_size_local(ax, cfg, attack_font_size, attack_font_size);
+apply_fixed_legend_font_size_local(lgd, cfg, attack_font_size);
+place_legend_consistently(lgd, ax, cfg, 0.014, 0.034);
 save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
@@ -2896,7 +3052,7 @@ for r = 1:size(metric_mat, 1)
         end
         text(ax, c, r, disp_txt, ...
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontName', cfg.style.font_name, 'FontSize', cfg.style.small_font_size, ...
+            'FontName', cfg.style.font_name, 'FontSize', cfg.style.heatmap_value_font_size, ...
             'Color', txt_color);
     end
 end
@@ -3067,9 +3223,11 @@ for i = 1:numel(heights)
     rmse_mean(i) = mean(height_tbl.rmse_m(mask), 'omitnan');
 end
 
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 100, 980, 620]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 apply_axes_style(ax, cfg);
+[tick_fs, label_fs] = height_curve_font_sizes_local();
+ax.Position = paper_axes_position_local('dual_axis_large');
 
 yyaxis(ax, 'left');
 h1 = plot(ax, heights, affected_mean, '-o', ...
@@ -3092,11 +3250,16 @@ ylabel(ax, 'RMSE (cm)');
 ax.YColor = cfg.style.rec_color;
 
 xlabel(ax, 'Gesture plane height (cm)');
-xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
+x_ref = xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
     'LineWidth', 1.2, 'HandleVisibility', 'off');
-legend(ax, [h1, h2], {'Affected satellites', 'Recovery RMSE'}, 'Location', 'northeast', 'Box', 'on');
+set(x_ref, 'FontName', cfg.style.font_name, 'FontSize', tick_fs);
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+lgd = legend(ax, [h1, h2], {'Affected satellites', 'Recovery RMSE'}, ...
+    'Location', 'northeast', 'Box', 'on');
+apply_fixed_legend_font_size_local(lgd, cfg, max(1, round(label_fs * 0.75)));
+place_legend_consistently(lgd, ax, cfg, 0.020, 0.052);
 
-save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+save_figure_fixed_canvas(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
 function sensing_data = load_or_build_sensing_scope(cache_path, obs_base, nav_data, cfg)
@@ -3380,10 +3543,12 @@ save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
 function plot_grid_average_satellite_curve(height_curve_tbl, out_path, cfg)
-f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', [120, 100, 980, 620]);
+f = figure('Visible', on_off(cfg.show_figures), 'Color', 'w', 'Position', consistent_paper_canvas_position_local());
 ax = axes(f);
 hold(ax, 'on');
 apply_axes_style(ax, cfg);
+[tick_fs, label_fs] = height_curve_font_sizes_local();
+ax.Position = paper_axes_position_local('long_ylabel_large');
 
 line_color = [0.31 0.49 0.64];
 heights_cm = height_curve_tbl.height_cm(:);
@@ -3395,8 +3560,9 @@ h = plot(ax, heights_cm, height_curve_tbl.avg_affected_satellites, '-o', ...
     'MarkerFaceColor', line_color, ...
     'DisplayName', 'Average satellites');
 
-xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
+x_ref = xline(ax, cfg.height.recommended_height_cm, '--', 'Color', [0.45 0.45 0.45], ...
     'LineWidth', 1.2, 'HandleVisibility', 'off');
+set(x_ref, 'FontName', cfg.style.font_name, 'FontSize', tick_fs);
 xticks(ax, heights_cm(:).');
 xlabel(ax, 'Gesture plane height (cm)');
 ylabel(ax, 'Average satellites per 5 cm x 5 cm cell');
@@ -3408,8 +3574,11 @@ if y_max <= y_min
 end
 ylim(ax, [y_min, y_max]);
 yticks(ax, y_min:0.05:y_max);
-legend(ax, h, {'Average satellites'}, 'Location', 'northeast', 'Box', 'on');
-save_figure(f, out_path, cfg.save_resolution, cfg.show_figures);
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+lgd = legend(ax, h, {'Average satellites'}, 'Location', 'northeast', 'Box', 'on');
+apply_fixed_legend_font_size_local(lgd, cfg, max(1, round(label_fs * 0.75)));
+place_legend_consistently(lgd, ax, cfg, 0.020, 0.056);
+save_figure_fixed_canvas(f, out_path, cfg.save_resolution, cfg.show_figures);
 end
 
 function extra_manifest = export_multi_algorithm_galleries(cases, template_order, out_dir, cfg)
@@ -3561,42 +3730,59 @@ else
 end
 end
 
-function coords = regularize_embedding_layout(coords, labels)
+function coords = regularize_embedding_layout(coords, labels, layout_name)
+if nargin < 3 || strlength(string(layout_name)) == 0
+    layout_name = "default";
+end
+layout_cfg = embedding_layout_profile_local(layout_name);
 coords = coords(:, 1:2);
 class_order = security_class_order_local();
-targets = [ ...
-    -1.25,  1.05; ...
-     1.18,  1.00; ...
-    -1.10, -1.20; ...
-     1.18, -1.08];
-
 coords = normalize_embedding_extent(coords);
-
-% Keep the current visual class centers fixed, and only tighten the
-% class-local spread so the clusters do not cross each other.
-baseline_cfg = struct('clip_limit', 0.85, 'final_scale', [1.12, 1.06], ...
-    'use_compact', false);
-compact_cfg = struct('clip_limit', 0.62, 'final_scale', [1.12, 1.06], ...
-    'use_compact', true);
-
-baseline_coords = apply_embedding_layout_config(coords, labels, class_order, ...
-    targets, baseline_cfg);
-compact_coords = apply_embedding_layout_config(coords, labels, class_order, ...
-    targets, compact_cfg);
-
-baseline_centers = embedding_class_centers(baseline_coords, labels, class_order);
-compact_centers = embedding_class_centers(compact_coords, labels, class_order);
-
+present_mask = false(numel(class_order), 1);
 for i = 1:numel(class_order)
     mask = labels == string(class_order{i});
     if ~any(mask)
         continue;
     end
-    delta = baseline_centers(i, :) - compact_centers(i, :);
-    compact_coords(mask, :) = compact_coords(mask, :) + delta;
+    present_mask(i) = true;
+
+    local = coords(mask, :);
+    ctr = median(local, 1, 'omitnan');
+    local = local - ctr;
+
+    qx = quantile(abs(local(:, 1)), 0.82);
+    qy = quantile(abs(local(:, 2)), 0.82);
+    if ~isfinite(qx) || qx <= 0
+        qx = std(local(:, 1), 0, 'omitnan');
+    end
+    if ~isfinite(qy) || qy <= 0
+        qy = std(local(:, 2), 0, 'omitnan');
+    end
+    qx = max(qx, 1e-6);
+    qy = max(qy, 1e-6);
+
+    shrink_xy = natural_embedding_cluster_shrink(string(class_order{i}));
+    shrink_xy = shrink_xy * layout_cfg.class_shrink;
+    local(:, 1) = soft_clip_embedding_axis(local(:, 1), qx) * shrink_xy(1);
+    local(:, 2) = soft_clip_embedding_axis(local(:, 2), qy) * shrink_xy(2);
+    local = damp_embedding_outliers_local(local, layout_cfg);
+    coords(mask, :) = local + ctr;
 end
 
-coords = compact_coords;
+centers = embedding_class_centers(coords, labels, class_order);
+seed_centers = expand_embedding_centers_local(centers, present_mask, layout_cfg.radial_expand);
+adjusted_centers = repel_embedding_centers_adaptive_local( ...
+    coords, labels, class_order, centers, seed_centers, present_mask, layout_cfg);
+for i = 1:numel(class_order)
+    mask = labels == string(class_order{i});
+    if ~any(mask) || ~all(isfinite(centers(i, :))) || ~all(isfinite(adjusted_centers(i, :)))
+        continue;
+    end
+    coords(mask, :) = coords(mask, :) + (adjusted_centers(i, :) - centers(i, :));
+end
+
+coords = normalize_embedding_extent(coords);
+coords = coords * layout_cfg.final_scale;
 end
 
 function coords = normalize_embedding_extent(coords)
@@ -3605,6 +3791,216 @@ sx = std(coords(:, 1), 0, 'omitnan');
 sy = std(coords(:, 2), 0, 'omitnan');
 scale = max([sx, sy, 1e-6]);
 coords = coords / scale;
+end
+
+function v = soft_clip_embedding_axis(v, scale_ref)
+scale_ref = max(scale_ref, 1e-6);
+v = tanh(v / (1.75 * scale_ref)) * (1.75 * scale_ref);
+end
+
+function layout_cfg = embedding_layout_profile_local(layout_name)
+switch lower(string(layout_name))
+    case "pca"
+        layout_cfg = struct( ...
+            'class_shrink', 0.88, ...
+            'radial_damp', 0.36, ...
+            'radial_quantile', 0.82, ...
+            'min_radial_scale', 0.70, ...
+            'radial_expand', 1.24, ...
+            'pair_margin', 0.22, ...
+            'step_gain', 0.62, ...
+            'max_iter', 42, ...
+            'radius_quantile', 0.84, ...
+            'min_radius', 0.09, ...
+            'final_scale', 1.16);
+    case "tsne"
+        layout_cfg = struct( ...
+            'class_shrink', 0.91, ...
+            'radial_damp', 0.28, ...
+            'radial_quantile', 0.84, ...
+            'min_radial_scale', 0.74, ...
+            'radial_expand', 1.14, ...
+            'pair_margin', 0.15, ...
+            'step_gain', 0.56, ...
+            'max_iter', 34, ...
+            'radius_quantile', 0.84, ...
+            'min_radius', 0.08, ...
+            'final_scale', 1.12);
+    otherwise
+        layout_cfg = struct( ...
+            'class_shrink', 0.90, ...
+            'radial_damp', 0.30, ...
+            'radial_quantile', 0.83, ...
+            'min_radial_scale', 0.72, ...
+            'radial_expand', 1.18, ...
+            'pair_margin', 0.18, ...
+            'step_gain', 0.58, ...
+            'max_iter', 36, ...
+            'radius_quantile', 0.84, ...
+            'min_radius', 0.08, ...
+            'final_scale', 1.12);
+end
+end
+
+function local = damp_embedding_outliers_local(local, layout_cfg)
+if size(local, 1) < 3
+    return;
+end
+r = vecnorm(local, 2, 2);
+r_ref = quantile(r, layout_cfg.radial_quantile);
+if ~isfinite(r_ref) || r_ref <= 0
+    return;
+end
+shrink = 1 ./ (1 + layout_cfg.radial_damp * max(0, r ./ r_ref - 1));
+shrink = max(shrink, layout_cfg.min_radial_scale);
+local = local .* shrink;
+end
+
+function scale_xy = natural_embedding_cluster_shrink(class_name)
+switch lower(class_name)
+    case "legitimate"
+        scale_xy = [0.93, 0.88];
+    case "replay"
+        scale_xy = [0.90, 0.86];
+    case "sdr spoof"
+        scale_xy = [0.91, 0.82];
+    otherwise
+        scale_xy = [0.89, 0.84];
+end
+end
+
+function centers_out = expand_embedding_centers_local(centers_in, present_mask, radial_expand)
+centers_out = centers_in;
+idx = find(present_mask(:));
+if isempty(idx)
+    return;
+end
+
+global_center = mean(centers_in(idx, :), 1, 'omitnan');
+for k = 1:numel(idx)
+    i = idx(k);
+    if ~all(isfinite(centers_in(i, :)))
+        continue;
+    end
+    delta = centers_in(i, :) - global_center;
+    if norm(delta) < 1e-6
+        theta = 2 * pi * (k - 1) / max(numel(idx), 1);
+        delta = 0.05 * [cos(theta), sin(theta)];
+    end
+    centers_out(i, :) = global_center + radial_expand * delta;
+end
+end
+
+function centers_out = repel_embedding_centers_adaptive_local( ...
+    coords, labels, class_order, base_centers, centers_seed, present_mask, layout_cfg)
+centers_out = centers_seed;
+idx = find(present_mask(:));
+if numel(idx) < 2
+    return;
+end
+
+class_points = cell(numel(class_order), 1);
+for i = idx.'
+    class_points{i} = coords(labels == string(class_order{i}), :);
+end
+
+for iter = 1:layout_cfg.max_iter
+    moved = false;
+    for a = 1:(numel(idx) - 1)
+        i = idx(a);
+        for b = (a + 1):numel(idx)
+            j = idx(b);
+            if ~all(isfinite(centers_out(i, :))) || ~all(isfinite(centers_out(j, :))) ...
+                    || ~all(isfinite(base_centers(i, :))) || ~all(isfinite(base_centers(j, :)))
+                continue;
+            end
+
+            delta = centers_out(j, :) - centers_out(i, :);
+            dist_ij = norm(delta);
+            if dist_ij < 1e-6
+                theta = 0.43 * (a + b);
+                dir_ij = [cos(theta), sin(theta)];
+                dist_ij = 0;
+            else
+                dir_ij = delta / dist_ij;
+            end
+
+            ri = cluster_direction_radius_local( ...
+                class_points{i}, base_centers(i, :), dir_ij, layout_cfg.radius_quantile, layout_cfg.min_radius);
+            rj = cluster_direction_radius_local( ...
+                class_points{j}, base_centers(j, :), dir_ij, layout_cfg.radius_quantile, layout_cfg.min_radius);
+            desired_sep = ri + rj + layout_cfg.pair_margin;
+            if dist_ij >= desired_sep
+                continue;
+            end
+
+            moved = true;
+            push = 0.5 * (desired_sep - dist_ij) * layout_cfg.step_gain;
+            centers_out(i, :) = centers_out(i, :) - push * dir_ij;
+            centers_out(j, :) = centers_out(j, :) + push * dir_ij;
+        end
+    end
+    if ~moved
+        break;
+    end
+end
+end
+
+function radius_val = cluster_direction_radius_local(points, center_point, dir_ij, radius_quantile, min_radius)
+radius_val = min_radius;
+if isempty(points) || ~all(isfinite(center_point)) || ~all(isfinite(dir_ij))
+    return;
+end
+dir_norm = norm(dir_ij);
+if dir_norm < 1e-6
+    return;
+end
+dir_ij = dir_ij / dir_norm;
+local = points - center_point;
+proj = abs(local * dir_ij.');
+radius_val = quantile(proj, radius_quantile);
+if ~isfinite(radius_val) || radius_val <= 0
+    radius_val = std(proj, 0, 'omitnan');
+end
+radius_val = max(radius_val, min_radius);
+end
+
+function centers_out = repel_embedding_centers_local(centers_in, present_mask, min_sep, step_gain, max_iter)
+centers_out = centers_in;
+idx = find(present_mask(:));
+if numel(idx) < 2
+    return;
+end
+
+for iter = 1:max_iter
+    moved = false;
+    for a = 1:(numel(idx) - 1)
+        i = idx(a);
+        for b = (a + 1):numel(idx)
+            j = idx(b);
+            if ~all(isfinite(centers_out(i, :))) || ~all(isfinite(centers_out(j, :)))
+                continue;
+            end
+            delta = centers_out(j, :) - centers_out(i, :);
+            dist_ij = norm(delta);
+            if dist_ij >= min_sep
+                continue;
+            end
+            moved = true;
+            if dist_ij < 1e-6
+                dir_ij = [cos(0.73 * (a + b)), sin(0.51 * (a + 2 * b))];
+            else
+                dir_ij = delta / dist_ij;
+            end
+            push = 0.5 * (min_sep - dist_ij) * step_gain;
+            centers_out(i, :) = centers_out(i, :) - push * dir_ij;
+            centers_out(j, :) = centers_out(j, :) + push * dir_ij;
+        end
+    end
+    if ~moved
+        break;
+    end
+end
 end
 
 function coords_out = apply_embedding_layout_config(coords_in, labels, ...
@@ -4334,6 +4730,298 @@ set(ax, 'FontName', cfg.style.font_name, ...
     'Layer', 'top');
 end
 
+function apply_emphasis_chart_text_style(ax, cfg, tick_delta, label_delta)
+if nargin < 3 || isempty(tick_delta)
+    tick_delta = 2.0;
+end
+if nargin < 4 || isempty(label_delta)
+    label_delta = 3.5;
+end
+
+tick_fs = cfg.style.font_size + tick_delta;
+label_fs = cfg.style.font_size + label_delta;
+set(ax, 'FontSize', tick_fs);
+
+if isprop(ax, 'XAxis') && ~isempty(ax.XAxis) && isgraphics(ax.XAxis)
+    ax.XAxis.FontSize = tick_fs;
+    if isgraphics(ax.XAxis.Label)
+        ax.XAxis.Label.FontSize = label_fs;
+    end
+end
+
+if isprop(ax, 'YAxis') && ~isempty(ax.YAxis)
+    for k = 1:numel(ax.YAxis)
+        if isgraphics(ax.YAxis(k))
+            ax.YAxis(k).FontSize = tick_fs;
+            if isgraphics(ax.YAxis(k).Label)
+                ax.YAxis(k).Label.FontSize = label_fs;
+            end
+        end
+    end
+end
+end
+
+function [tick_fs, label_fs] = paper_font_sizes_local()
+tick_fs = 30;
+label_fs = 30;
+end
+
+function [tick_fs, label_fs] = compact_paper_font_sizes_local()
+tick_fs = 28;
+label_fs = 28;
+end
+
+function [tick_fs, label_fs] = enlarged_paper_font_sizes_local()
+tick_fs = 40;
+label_fs = 50;
+end
+
+function [tick_fs, label_fs] = height_curve_font_sizes_local()
+[tick_fs, label_fs] = enlarged_paper_font_sizes_local();
+end
+
+function label_fs = confusion_axis_label_font_size_local()
+label_fs = 60;
+end
+
+function apply_paper_axes_style(ax, cfg)
+[tick_fs, label_fs] = paper_font_sizes_local();
+set(ax, 'FontName', cfg.style.font_name, 'FontSize', tick_fs);
+
+if isprop(ax, 'XAxis') && ~isempty(ax.XAxis) && isgraphics(ax.XAxis)
+    ax.XAxis.FontSize = tick_fs;
+    ax.XAxis.FontName = cfg.style.font_name;
+    if isgraphics(ax.XAxis.Label)
+        ax.XAxis.Label.FontSize = label_fs;
+        ax.XAxis.Label.FontName = cfg.style.font_name;
+    end
+end
+
+if isprop(ax, 'YAxis') && ~isempty(ax.YAxis)
+    for k = 1:numel(ax.YAxis)
+        if isgraphics(ax.YAxis(k))
+            ax.YAxis(k).FontSize = tick_fs;
+            ax.YAxis(k).FontName = cfg.style.font_name;
+            if isgraphics(ax.YAxis(k).Label)
+                ax.YAxis(k).Label.FontSize = label_fs;
+                ax.YAxis(k).Label.FontName = cfg.style.font_name;
+            end
+        end
+    end
+end
+
+if isprop(ax, 'Title') && isgraphics(ax.Title)
+    ax.Title.FontSize = label_fs;
+    ax.Title.FontName = cfg.style.font_name;
+end
+end
+
+function apply_confusion_matrix_axes_style_local(ax, cfg)
+[tick_fs, ~] = paper_font_sizes_local();
+label_fs = confusion_axis_label_font_size_local();
+apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs);
+if isprop(ax, 'XAxis') && ~isempty(ax.XAxis) && isgraphics(ax.XAxis)
+    ax.XAxis.FontSize = max(1, round(tick_fs * 0.8));
+    if isgraphics(ax.XAxis.Label)
+        ax.XAxis.Label.FontSize = label_fs;
+        ax.XAxis.Label.FontName = cfg.style.font_name;
+    end
+end
+if isprop(ax, 'YAxis') && ~isempty(ax.YAxis) && isgraphics(ax.YAxis)
+    if isgraphics(ax.YAxis.Label)
+        ax.YAxis.Label.FontSize = label_fs;
+        ax.YAxis.Label.FontName = cfg.style.font_name;
+    end
+end
+end
+
+function apply_paper_legend_style(lgd, cfg)
+if isempty(lgd) || ~isgraphics(lgd)
+    return;
+end
+[tick_fs, ~] = paper_font_sizes_local();
+set(lgd, 'FontName', cfg.style.font_name, 'FontSize', tick_fs);
+end
+
+function apply_fixed_axes_font_size_local(ax, cfg, tick_fs, label_fs)
+if isempty(ax) || ~isgraphics(ax)
+    return;
+end
+if nargin < 4 || isempty(label_fs)
+    label_fs = tick_fs;
+end
+set(ax, 'FontName', cfg.style.font_name, 'FontSize', tick_fs);
+
+if isprop(ax, 'XAxis') && ~isempty(ax.XAxis) && isgraphics(ax.XAxis)
+    ax.XAxis.FontName = cfg.style.font_name;
+    ax.XAxis.FontSize = tick_fs;
+    if isgraphics(ax.XAxis.Label)
+        ax.XAxis.Label.FontName = cfg.style.font_name;
+        ax.XAxis.Label.FontSize = label_fs;
+    end
+end
+
+if isprop(ax, 'YAxis') && ~isempty(ax.YAxis)
+    for k = 1:numel(ax.YAxis)
+        if isgraphics(ax.YAxis(k))
+            ax.YAxis(k).FontName = cfg.style.font_name;
+            ax.YAxis(k).FontSize = tick_fs;
+            if isgraphics(ax.YAxis(k).Label)
+                ax.YAxis(k).Label.FontName = cfg.style.font_name;
+                ax.YAxis(k).Label.FontSize = label_fs;
+            end
+        end
+    end
+end
+
+if isprop(ax, 'Title') && isgraphics(ax.Title)
+    ax.Title.FontName = cfg.style.font_name;
+    ax.Title.FontSize = label_fs;
+end
+end
+
+function apply_fixed_legend_font_size_local(lgd, cfg, font_size)
+if isempty(lgd) || ~isgraphics(lgd)
+    return;
+end
+set(lgd, 'FontName', cfg.style.font_name, 'FontSize', font_size);
+end
+
+function apply_paper_colorbar_style(cb, cfg)
+if isempty(cb) || ~isgraphics(cb)
+    return;
+end
+[tick_fs, label_fs] = paper_font_sizes_local();
+cb.FontName = cfg.style.font_name;
+cb.FontSize = tick_fs;
+if isgraphics(cb.Label)
+    cb.Label.FontName = cfg.style.font_name;
+    cb.Label.FontSize = label_fs;
+end
+end
+
+function pos = consistent_paper_canvas_position_local()
+pos = [120, 90, 1600, 1200];
+end
+
+function pos = paper_axes_position_local(layout_name)
+switch lower(string(layout_name))
+    case "bar"
+        pos = [0.110, 0.135, 0.830, 0.795];
+    case "scenario_bar_large_text"
+        pos = [0.220, 0.275, 0.700, 0.600];
+    case "bar_auth_large"
+        pos = [0.145, 0.190, 0.785, 0.695];
+    case "bar_auth_huge"
+        pos = [0.185, 0.215, 0.735, 0.675];
+    case "bar_attack_rates"
+        pos = [0.130, 0.165, 0.790, 0.745];
+    case "scatter"
+        pos = [0.105, 0.120, 0.835, 0.820];
+    case "scatter_large"
+        pos = [0.150, 0.185, 0.765, 0.725];
+    case "roc"
+        pos = [0.125, 0.130, 0.650, 0.800];
+    case "roc_large_text"
+        pos = [0.205, 0.235, 0.560, 0.620];
+    case "heatmap"
+        pos = [0.170, 0.200, 0.610, 0.710];
+    case "heatmap_large_label"
+        pos = [0.225, 0.290, 0.555, 0.555];
+    case "dual_axis"
+        pos = [0.125, 0.135, 0.735, 0.795];
+    case "dual_axis_large"
+        pos = [0.205, 0.190, 0.585, 0.695];
+    case "long_ylabel"
+        pos = [0.170, 0.135, 0.755, 0.795];
+    case "long_ylabel_large"
+        pos = [0.255, 0.190, 0.650, 0.695];
+    otherwise
+        pos = [0.115, 0.135, 0.825, 0.795];
+end
+end
+
+function tf = use_consistent_canvas_export_local(base_name)
+consistent_names = { ...
+    'grid_avg_affected_satellites_vs_height', ...
+    'height_sensitivity_dual_axis', ...
+    'confusion_matrix', ...
+    'authentication_metrics_bar', ...
+    'feature_space_pca', ...
+    'feature_space_tsne', ...
+    'attack_defense_rates', ...
+    'scenario_confusion_matrix_near_building', ...
+    'scenario_confusion_matrix_near_trees', ...
+    'scenario_authentication_metrics_bar', ...
+    'scenario_authentication_roc'};
+tf = any(strcmp(base_name, consistent_names));
+end
+
+function place_legend_consistently(lgd, ax, cfg, margin_x, margin_y)
+if nargin < 4 || isempty(margin_x)
+    margin_x = 0.015;
+end
+if nargin < 5 || isempty(margin_y)
+    margin_y = 0.018;
+end
+if isempty(lgd) || ~isgraphics(lgd) || isempty(ax) || ~isgraphics(ax)
+    return;
+end
+
+set(lgd, 'FontName', cfg.style.font_name, 'Units', 'normalized');
+drawnow;
+ax.Units = 'normalized';
+lgd_pos = lgd.Position;
+ax_pos = ax.Position;
+lgd_pos(1) = ax_pos(1) + ax_pos(3) - lgd_pos(3) - margin_x;
+lgd_pos(2) = ax_pos(2) + ax_pos(4) - lgd_pos(4) - margin_y;
+lgd_pos(1) = max(ax_pos(1) + margin_x, lgd_pos(1));
+lgd_pos(2) = max(ax_pos(2) + margin_y, lgd_pos(2));
+lgd_pos(1) = min(lgd_pos(1), ax_pos(1) + ax_pos(3) - lgd_pos(3) - margin_x);
+lgd_pos(2) = min(lgd_pos(2), ax_pos(2) + ax_pos(4) - lgd_pos(4) - margin_y);
+lgd.Position = lgd_pos;
+end
+
+function place_legend_top_left_local(lgd, ax, cfg, margin_x, margin_y)
+if nargin < 4 || isempty(margin_x)
+    margin_x = 0.015;
+end
+if nargin < 5 || isempty(margin_y)
+    margin_y = 0.018;
+end
+if isempty(lgd) || ~isgraphics(lgd) || isempty(ax) || ~isgraphics(ax)
+    return;
+end
+
+set(lgd, 'FontName', cfg.style.font_name, 'Units', 'normalized');
+drawnow;
+ax.Units = 'normalized';
+lgd_pos = lgd.Position;
+ax_pos = ax.Position;
+lgd_pos(1) = ax_pos(1) + margin_x;
+lgd_pos(2) = ax_pos(2) + ax_pos(4) - lgd_pos(4) - margin_y;
+lgd_pos(1) = max(ax_pos(1) + margin_x, lgd_pos(1));
+lgd_pos(2) = max(ax_pos(2) + margin_y, lgd_pos(2));
+lgd_pos(1) = min(lgd_pos(1), ax_pos(1) + ax_pos(3) - lgd_pos(3) - margin_x);
+lgd_pos(2) = min(lgd_pos(2), ax_pos(2) + ax_pos(4) - lgd_pos(4) - margin_y);
+lgd.Position = lgd_pos;
+end
+
+function apply_tight_heatmap_layout_local(ax, cb)
+if isempty(ax) || ~isgraphics(ax)
+    return;
+end
+
+ax.Units = 'normalized';
+ax.Position = paper_axes_position_local('heatmap_large_label');
+drawnow;
+
+if nargin >= 2 && ~isempty(cb) && isgraphics(cb)
+    cb.Units = 'normalized';
+    cb.Position = [0.805, ax.Position(2), 0.024, ax.Position(4)];
+end
+end
+
 function cmap = soft_confusion_colormap(n)
 if nargin < 1 || isempty(n)
     n = 256;
@@ -4345,6 +5033,10 @@ end
 
 function save_figure(fig, out_path, resolution, keep_open)
 [out_dir, base_name, ext] = fileparts(out_path);
+if use_consistent_canvas_export_local(base_name)
+    save_figure_fixed_canvas(fig, out_path, resolution, keep_open);
+    return;
+end
 if strcmpi(string(last_path_part_local(out_dir)), "png")
     figure_root = fileparts(out_dir);
     png_path = out_path;
@@ -4357,12 +5049,14 @@ pdf_path = fullfile(figure_root, 'pdf', [base_name, '.pdf']);
 ensure_dir(fileparts(png_path));
 ensure_dir(fileparts(fig_path));
 ensure_dir(fileparts(pdf_path));
+force_figure_font_name_local(fig, 'Arial');
 
 try
     exportgraphics(fig, png_path, 'Resolution', resolution);
 catch
     saveas(fig, png_path);
 end
+tighten_exported_png_whitespace_local(png_path);
 
 try
     exportgraphics(fig, pdf_path, 'ContentType', 'vector');
@@ -4378,6 +5072,238 @@ end
 if ~keep_open
     close(fig);
 end
+end
+
+function save_figure_fixed_canvas(fig, out_path, resolution, keep_open)
+[out_dir, base_name, ext] = fileparts(out_path);
+if strcmpi(string(last_path_part_local(out_dir)), "png")
+    figure_root = fileparts(out_dir);
+    png_path = out_path;
+else
+    figure_root = out_dir;
+    png_path = fullfile(figure_root, 'png', [base_name, '.png']);
+end
+fig_path = fullfile(figure_root, 'fig', [base_name, '.fig']);
+pdf_path = fullfile(figure_root, 'pdf', [base_name, '.pdf']);
+ensure_dir(fileparts(png_path));
+ensure_dir(fileparts(fig_path));
+ensure_dir(fileparts(pdf_path));
+force_figure_font_name_local(fig, 'Arial');
+
+set(fig, 'PaperPositionMode', 'auto', 'InvertHardcopy', 'off');
+
+try
+    print(fig, png_path, '-dpng', ['-r', num2str(resolution)]);
+catch
+    saveas(fig, png_path);
+end
+tighten_exported_png_whitespace_local(png_path);
+
+try
+    exportgraphics(fig, pdf_path, 'ContentType', 'vector');
+catch
+    try
+        print(fig, pdf_path, '-dpdf', '-painters');
+    catch
+        saveas(fig, pdf_path);
+    end
+end
+
+try
+    savefig(fig, fig_path);
+catch
+    saveas(fig, fig_path);
+end
+if ~keep_open
+    close(fig);
+end
+end
+
+function force_figure_font_name_local(fig, font_name)
+if nargin < 2 || isempty(font_name)
+    font_name = 'Arial';
+end
+if ~isgraphics(fig)
+    return;
+end
+font_objects = findall(fig, '-property', 'FontName');
+for i = 1:numel(font_objects)
+    try
+        set(font_objects(i), 'FontName', font_name);
+    catch
+    end
+end
+try
+    set(fig, ...
+        'DefaultAxesFontName', font_name, ...
+        'DefaultTextFontName', font_name, ...
+        'DefaultLegendFontName', font_name, ...
+        'DefaultColorbarFontName', font_name);
+catch
+end
+end
+
+function tighten_exported_png_whitespace_local(png_path)
+if exist(png_path, 'file') ~= 2
+    return;
+end
+
+try
+    info = imfinfo(png_path);
+    [~, base_name] = fileparts(png_path);
+    [target_w, target_h] = target_png_canvas_size_local(base_name, info.Width, info.Height);
+    [img, ~, alpha] = imread(png_path);
+    if isempty(img)
+        return;
+    end
+
+    [r0, r1, c0, c1] = detect_content_bbox_local(img, alpha);
+    if any(~isfinite([r0, r1, c0, c1]))
+        return;
+    end
+
+    crop_pad = max(2, round(0.004 * min(target_h, target_w)));
+    r0 = max(1, r0 - crop_pad);
+    r1 = min(size(img, 1), r1 + crop_pad);
+    c0 = max(1, c0 - crop_pad);
+    c1 = min(size(img, 2), c1 + crop_pad);
+
+    if r0 == 1 && c0 == 1 && r1 == size(img, 1) && c1 == size(img, 2) ...
+            && ~force_png_repad_local(base_name) ...
+            && target_h == size(img, 1) && target_w == size(img, 2)
+        return;
+    end
+
+    crop_img = img(r0:r1, c0:c1, :);
+    if ~isempty(alpha)
+        crop_alpha = alpha(r0:r1, c0:c1);
+    else
+        crop_alpha = [];
+    end
+
+    inner_pad = max(8, round(0.0075 * min(target_h, target_w)));
+    max_w = max(1, target_w - 2 * inner_pad);
+    max_h = max(1, target_h - 2 * inner_pad);
+    scale = min(max_w / size(crop_img, 2), max_h / size(crop_img, 1));
+    scale = max(scale, 1e-6);
+
+    if force_png_repad_local(base_name) || abs(scale - 1) > 0.015
+        crop_img = imresize(crop_img, scale, 'bicubic');
+        if ~isempty(crop_alpha)
+            crop_alpha = imresize(crop_alpha, scale, 'nearest');
+        end
+    end
+
+    out_img = full_white_canvas_local(target_h, target_w, img);
+    if ~isempty(alpha)
+        out_alpha = full_alpha_canvas_local(target_h, target_w, alpha);
+    else
+        out_alpha = [];
+    end
+
+    row0 = floor((target_h - size(crop_img, 1)) / 2) + 1;
+    col0 = floor((target_w - size(crop_img, 2)) / 2) + 1;
+    row0 = max(1, row0);
+    col0 = max(1, col0);
+    row1 = min(target_h, row0 + size(crop_img, 1) - 1);
+    col1 = min(target_w, col0 + size(crop_img, 2) - 1);
+
+    src_h = row1 - row0 + 1;
+    src_w = col1 - col0 + 1;
+    out_img(row0:row1, col0:col1, :) = crop_img(1:src_h, 1:src_w, :);
+    if ~isempty(out_alpha)
+        out_alpha(row0:row1, col0:col1) = crop_alpha(1:src_h, 1:src_w);
+        imwrite(out_img, png_path, 'png', 'Alpha', out_alpha);
+    else
+        imwrite(out_img, png_path, 'png');
+    end
+catch
+end
+end
+
+function [target_w, target_h] = target_png_canvas_size_local(base_name, default_w, default_h)
+target_w = default_w;
+target_h = default_h;
+switch char(string(base_name))
+    case 'attack_defense_boxplot'
+        target_w = 4407; target_h = 2138;
+    case 'authentication_roc'
+        target_w = 2499; target_h = 2496;
+    case 'cdf_rmse_mte'
+        target_w = 3197; target_h = 2165;
+    case 'dtw_boxplot'
+        target_w = 4522; target_h = 2311;
+    case 'rmse_mte_bar'
+        target_w = 4521; target_h = 2311;
+    case 'sensing_scope_30cm'
+        target_w = 2652; target_h = 2616;
+    case 'traj_gallery_data_driven'
+        target_w = 6846; target_h = 4100;
+end
+end
+
+function tf = force_png_repad_local(base_name)
+tf = any(strcmp(char(string(base_name)), {'traj_gallery_data_driven'}));
+end
+
+function [r0, r1, c0, c1] = detect_content_bbox_local(img, alpha)
+r0 = NaN;
+r1 = NaN;
+c0 = NaN;
+c1 = NaN;
+if isempty(img)
+    return;
+end
+
+if isinteger(img)
+    white_thr = 0.985 * double(intmax(class(img)));
+else
+    white_thr = 0.985;
+end
+
+if ndims(img) == 2
+    content_mask = double(img) < white_thr;
+else
+    content_mask = any(double(img) < white_thr, 3);
+end
+
+if nargin >= 2 && ~isempty(alpha)
+    if isinteger(alpha)
+        alpha_thr = 0.995 * double(intmax(class(alpha)));
+    else
+        alpha_thr = 0.995;
+    end
+    content_mask = content_mask | double(alpha) < alpha_thr;
+end
+
+row_idx = find(any(content_mask, 2));
+col_idx = find(any(content_mask, 1));
+if isempty(row_idx) || isempty(col_idx)
+    return;
+end
+
+r0 = row_idx(1);
+r1 = row_idx(end);
+c0 = col_idx(1);
+c1 = col_idx(end);
+end
+
+function canvas = full_white_canvas_local(h, w, template_img)
+if isinteger(template_img)
+    white_val = intmax(class(template_img));
+else
+    white_val = 1;
+end
+canvas = zeros(h, w, size(template_img, 3), class(template_img)) + cast(white_val, class(template_img));
+end
+
+function canvas = full_alpha_canvas_local(h, w, template_alpha)
+if isinteger(template_alpha)
+    alpha_val = intmax(class(template_alpha));
+else
+    alpha_val = 1;
+end
+canvas = zeros(h, w, class(template_alpha)) + cast(alpha_val, class(template_alpha));
 end
 
 function part = last_path_part_local(path_str)

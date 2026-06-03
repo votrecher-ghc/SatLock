@@ -29,7 +29,7 @@ if nargin < 5 || isempty(height_m)
     height_m = 0;
 end
 
-repo_dir = fileparts(fileparts(fileparts(mfilename('fullpath'))));
+repo_dir = resolve_repo_root_local(fileparts(mfilename('fullpath')));
 ensure_project_paths_local(repo_dir);
 
 cfg = default_cfg_local();
@@ -378,7 +378,7 @@ for i = 1:height(visible_tbl)
     radius = visible_tbl.elevation_deg(i);
 
     h = polarplot(pax, theta, radius, 'o', ...
-        'MarkerSize', 7, ...
+        'MarkerSize', 10, ...
         'MarkerFaceColor', col, ...
         'MarkerEdgeColor', [0.15 0.15 0.15], ...
         'LineWidth', 0.8);
@@ -491,4 +491,23 @@ function ensure_project_paths_local(repo_dir)
 addpath(fullfile(repo_dir, 'nav_parse'));
 addpath(fullfile(repo_dir, 'calculate_clock_bias_and_positon'));
 addpath(fullfile(repo_dir, 'plot', 'sky_plot'));
+addpath(fullfile(repo_dir, 'physical_consistency'));
+end
+
+function repo_dir = resolve_repo_root_local(start_dir)
+repo_dir = start_dir;
+while true
+    if isfolder(fullfile(repo_dir, 'data')) && ...
+            isfolder(fullfile(repo_dir, 'nav_parse')) && ...
+            isfolder(fullfile(repo_dir, 'calculate_clock_bias_and_positon'))
+        return;
+    end
+
+    parent_dir = fileparts(repo_dir);
+    if strcmp(parent_dir, repo_dir) || isempty(parent_dir)
+        error('calculate_and_plot_skyplot_from_nav:RepoRootNotFound', ...
+            'Cannot locate SatLock repo root from %s.', start_dir);
+    end
+    repo_dir = parent_dir;
+end
 end
